@@ -104,6 +104,7 @@ async function runPipeline(sessionId: string, meta: SessionMeta, config: Config)
       chunkCount: outcome.transcribedCount,
       hadSegments: outcome.hadSegments,
       failedChunks: outcome.failedChunks,
+      chunkBoundaries: outcome.chunkBoundaries,
       ...(outcome.hadSegments ? { segments: outcome.segments } : { text: outcome.text }),
     };
 
@@ -128,7 +129,7 @@ async function runPipeline(sessionId: string, meta: SessionMeta, config: Config)
 }
 
 async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_CAPTURE' }>): Promise<void> {
-  if (session) throw new CaptureError('already-recording', 'Un enregistrement est déjà en cours');
+  if (session) throw new CaptureError('already-recording', 'A recording is already in progress');
 
   await opfs.pruneSessions(message.sessionId);
 

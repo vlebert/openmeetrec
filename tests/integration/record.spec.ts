@@ -70,10 +70,17 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   // ici rendrait le test dépendant de quelques millisecondes.
   expect(recording.chunkCount).toBeGreaterThanOrEqual(2);
 
+  // Indicateur visible quel que soit l'onglet actif : le popup, lui, disparaît
+  // dès qu'on clique ailleurs.
+  const badge = await ext.worker.evaluate(() => chrome.action.getBadgeText({}));
+  expect(badge).toBe('REC');
+
   await send(popup, { target: 'sw', type: 'STOP_RECORDING' });
   const final = await waitForDone(popup);
 
   expect(final.status).toBe('done');
+  const badgeAfter = await ext.worker.evaluate(() => chrome.action.getBadgeText({}));
+  expect(badgeAfter).toBe('');
   expect(final.error).toBeNull();
   expect(final.chunkCount).toBe(EXPECTED_CHUNKS);
   expect(final.downloads).toHaveLength(1);
@@ -95,7 +102,15 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   expect(markdown).toContain('provider: custom');
   expect(markdown).toContain('platform: localhost');
   expect(markdown).toContain('speakers: 2');
-  expect(markdown).not.toContain('Transcription échouée');
+  expect(markdown).not.toContain('Transcription failed');
+  // Une section par chunk transcrit, pour rendre lisible le fait que la
+  // numérotation des speakers repart de zéro à chaque frontière. Le nombre de
+  // sections dépend de la distribution des segments près de la fin de la
+  // session (chunk final potentiellement très court) : on vérifie qu'il y en a
+  // plusieurs, pas un compte exact.
+  const chunkSections = [...markdown.matchAll(/\*\*Chunk \d+\*\*/g)];
+  expect(chunkSections.length).toBeGreaterThanOrEqual(2);
+  expect(markdown).toContain('**Chunk 1**');
 
   // Le merge doit rendre une grille continue, sans doublon aux frontières de
   // chunks : c'est tout l'intérêt de la coupe au milieu de l'overlap (F-AUD-06).

@@ -94,17 +94,17 @@ export function validateConfig(config: Config): ConfigProblem[] {
   const problems: ConfigProblem[] = [];
 
   if (!config.apiKeys[config.provider]) {
-    problems.push({ field: 'apiKey', message: `Clé API manquante pour ${config.provider}.` });
+    problems.push({ field: 'apiKey', message: `Missing API key for ${config.provider}.` });
   }
   if (!config.model) {
-    problems.push({ field: 'model', message: 'Aucun modèle sélectionné.' });
+    problems.push({ field: 'model', message: 'No model selected.' });
   }
   if (config.provider === 'custom') {
     const endpoint = config.customEndpoint ?? '';
     if (!endpoint) {
-      problems.push({ field: 'customEndpoint', message: 'Endpoint custom requis.' });
+      problems.push({ field: 'customEndpoint', message: 'Custom endpoint required.' });
     } else if (!/^https:\/\//.test(endpoint)) {
-      problems.push({ field: 'customEndpoint', message: 'Endpoint custom : HTTPS requis.' });
+      problems.push({ field: 'customEndpoint', message: 'Custom endpoint: HTTPS required.' });
     }
   }
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>OpenMeetRec</title>
@@ -12,24 +12,24 @@
         <span id="platform" class="platform"></span>
       </header>
 
-      <p id="status" class="status">Chargement…</p>
+      <p id="status" class="status">Loading…</p>
       <p id="timer" class="timer" hidden>00:00:00</p>
 
       <section class="meters" id="meters" hidden>
-        <label>Micro <span class="bar"><span id="mic-level"></span></span></label>
-        <label>Onglet <span class="bar"><span id="tab-level"></span></span></label>
+        <label>Mic <span class="bar"><span id="mic-level"></span></span></label>
+        <label>Tab <span class="bar"><span id="tab-level"></span></span></label>
       </section>
 
       <label class="option" id="mic-option">
         <input type="checkbox" id="mic-enabled" checked />
-        Enregistrer aussi mon micro
+        Also record my microphone
       </label>
 
-      <button id="toggle" type="button" disabled>Démarrer</button>
+      <button id="toggle" type="button" disabled>Start</button>
 
       <p id="error" class="error" hidden></p>
-      <button id="grant-mic" type="button" class="link" hidden>Autoriser le micro…</button>
-      <a id="options" href="#" class="link">Réglages</a>
+      <button id="grant-mic" type="button" class="link" hidden>Allow microphone…</button>
+      <a id="options" href="#" class="link">Settings</a>
     </main>
     <script type="module" src="popup.js"></script>
   </body>

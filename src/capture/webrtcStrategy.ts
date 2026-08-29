@@ -8,7 +8,7 @@
 
 import type { CaptureGrant, CaptureStrategy } from './strategy';
 
-const UNSUPPORTED = 'Capture Firefox non supportée en MVP';
+const UNSUPPORTED = 'Firefox capture not supported in MVP';
 
 export class WebRtcStrategy implements CaptureStrategy {
   readonly id = 'webrtc' as const;

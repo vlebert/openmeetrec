@@ -21,6 +21,8 @@ export interface TranscriptDocument {
   failedChunks?: number[];
   /** Le provider renvoyait-il des segments horodatés ? */
   hadSegments: boolean;
+  /** Bornes de chunk (`audio/merge#chunkBoundaries`), pour les sections de l'export. */
+  chunkBoundaries?: number[];
 }
 
 /** `HH:MM:SS` à partir d'un nombre de secondes. */
@@ -71,21 +73,21 @@ export function buildWarnings(doc: TranscriptDocument): string[] {
 
   if (!doc.hadSegments && doc.chunkCount > 1) {
     warnings.push(
-      "Le modèle utilisé ne renvoie pas de timestamps : les chunks ont été concaténés tels quels, " +
-        'le texte des zones de recouvrement peut apparaître en double.',
+      'The model in use does not return timestamps: chunks were concatenated as-is, ' +
+        'text in overlapping zones may appear duplicated.',
     );
   }
   if (doc.diarized && doc.chunkCount > 1) {
     warnings.push(
-      "Les identités de speakers sont attribuées indépendamment pour chaque chunk : " +
-        "« Speaker 0 » d'un chunk n'est pas forcément la même personne que dans le suivant.",
+      'Speaker identities are assigned independently for each chunk: ' +
+        '"Speaker 0" in one chunk is not necessarily the same person as in the next.',
     );
   }
   const failed = doc.failedChunks ?? [];
   if (failed.length > 0) {
     warnings.push(
-      `Transcription échouée pour ${failed.length} chunk(s) (${failed.join(', ')}) : ` +
-        'les passages correspondants sont absents.',
+      `Transcription failed for ${failed.length} chunk(s) (${failed.join(', ')}): ` +
+        'the corresponding passages are missing.',
     );
   }
 
@@ -98,12 +100,18 @@ function blockquote(lines: readonly string[]): string {
 
 export function buildBody(doc: TranscriptDocument): string {
   if (doc.diarized && doc.segments && doc.segments.length > 0) {
+    const boundaries = doc.chunkBoundaries ?? [];
     const lines: string[] = [];
-    doc.segments.forEach((seg, i) => {
-      if (i > 0) lines.push('');
-      lines.push(
-        `**${formatSpeaker(seg.speakerId)}** (${formatTimestamp(seg.start)}): ${seg.text.trim()}`,
-      );
+    let chunkNumber = 1;
+    if (boundaries.length > 0) lines.push(`**Chunk ${chunkNumber}**`);
+    doc.segments.forEach((seg) => {
+      while (chunkNumber - 1 < boundaries.length && seg.start >= boundaries[chunkNumber - 1]!) {
+        chunkNumber += 1;
+        if (lines.length > 0) lines.push('');
+        lines.push(`**Chunk ${chunkNumber}**`);
+      }
+      if (lines.length > 0) lines.push('');
+      lines.push(`**${formatSpeaker(seg.speakerId)}** (${formatTimestamp(seg.start)}): ${seg.text.trim()}`);
     });
     return blockquote(lines);
   }

@@ -13,8 +13,8 @@ import type { Config } from '@/shared/types';
 export function createProvider(config: Config, fetchImpl?: typeof fetch): TranscriptionProvider {
   const capabilities = resolveCapabilities(config);
   const apiKey = config.apiKeys[config.provider] ?? '';
-  if (apiKey === '') throw new ProviderError(config.provider, 'clé API absente');
-  if (capabilities.endpoint === '') throw new ProviderError(config.provider, 'endpoint absent');
+  if (apiKey === '') throw new ProviderError(config.provider, 'missing API key');
+  if (capabilities.endpoint === '') throw new ProviderError(config.provider, 'missing endpoint');
 
   const options: HttpProviderOptions = {
     endpoint: capabilities.endpoint,

@@ -31,7 +31,7 @@ const OFFSCREEN_PATH = 'offscreen/offscreen.html';
 
 chrome.runtime.onInstalled.addListener(() => {
   if (detectStrategyId() === null) {
-    console.warn('[openmeetrec] aucune stratégie de capture disponible sur ce navigateur');
+    console.warn('[openmeetrec] no capture strategy available on this browser');
   }
 });
 
@@ -48,7 +48,7 @@ void (async () => {
   await writeState({
     ...state,
     status: 'error',
-    error: { code: 'internal', message: 'Session interrompue par le navigateur' },
+    error: { code: 'internal', message: 'Session interrupted by the browser' },
   });
 })();
 
@@ -116,10 +116,10 @@ async function startRecording(
   const state = await readState();
   // F-CAP-08 : une seule session à la fois.
   if (state.status === 'recording' || state.status === 'processing') {
-    return { ok: false, error: { code: 'already-recording', message: 'Un enregistrement est déjà en cours' } };
+    return { ok: false, error: { code: 'already-recording', message: 'A recording is already in progress' } };
   }
   if (detectStrategyId() === null) {
-    return { ok: false, error: { code: 'unsupported', message: 'Capture non supportée par ce navigateur' } };
+    return { ok: false, error: { code: 'unsupported', message: 'Capture not supported by this browser' } };
   }
 
   const sessionId = crypto.randomUUID();
@@ -181,7 +181,7 @@ async function stopRecording(): Promise<Ack> {
 async function transcribeAndExport(): Promise<void> {
   const state = await readState();
   if (state.sessionId === null) {
-    await fail({ code: 'internal', message: 'session inconnue' });
+    await fail({ code: 'internal', message: 'unknown session' });
     return;
   }
 
@@ -210,7 +210,7 @@ async function transcribeAndExport(): Promise<void> {
   }
 
   if (!report.ok) {
-    await fail(report.error ?? { code: 'internal', message: 'transcription échouée' });
+    await fail(report.error ?? { code: 'internal', message: 'transcription failed' });
     return;
   }
 
@@ -235,7 +235,7 @@ async function transcribeAndExport(): Promise<void> {
       report.failedChunks.length > 0
         ? {
             code: 'internal',
-            message: `${report.failedChunks.length} chunk(s) non transcrit(s)${report.failureReason ? ` : ${report.failureReason}` : ''}`,
+            message: `${report.failedChunks.length} chunk(s) not transcribed${report.failureReason ? `: ${report.failureReason}` : ''}`,
           }
         : null,
   });
@@ -270,6 +270,17 @@ async function readState(): Promise<SessionState> {
 
 async function writeState(state: SessionState): Promise<void> {
   await chrome.storage.session.set({ [STATE_KEY]: state });
+  syncBadge(state);
+}
+
+/** Seul indicateur qui reste visible en permanence : le popup peut disparaître dès qu'on change d'onglet. */
+function syncBadge(state: SessionState): void {
+  if (state.status === 'recording') {
+    void chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
+    void chrome.action.setBadgeText({ text: 'REC' });
+  } else {
+    void chrome.action.setBadgeText({ text: '' });
+  }
 }
 
 async function ensureOffscreen(): Promise<void> {
@@ -277,7 +288,7 @@ async function ensureOffscreen(): Promise<void> {
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_PATH,
     reasons: [chrome.offscreen.Reason.USER_MEDIA],
-    justification: "Capture et enregistrement de l'audio de la visioconférence",
+    justification: "Capturing and recording the video conference audio",
   });
 }
 
@@ -294,7 +305,7 @@ async function closeOffscreen(): Promise<void> {
 
 async function sendToOffscreen(message: ToOffscreenMessage): Promise<Ack> {
   const response = (await chrome.runtime.sendMessage(message)) as Ack | undefined;
-  return response ?? { ok: false, error: { code: 'internal', message: 'offscreen sans réponse' } };
+  return response ?? { ok: false, error: { code: 'internal', message: 'offscreen document did not respond' } };
 }
 
 function toSessionError(error: unknown, code: SessionError['code'] = 'internal'): SessionError {

@@ -39,7 +39,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
   },
   {
     id: 'custom',
-    label: 'Custom (endpoint libre)',
+    label: 'Custom (free endpoint)',
     endpoint: '',
     models: [],
     supportsDiarization: false,
@@ -48,7 +48,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 
 export function getProviderPreset(id: Exclude<ProviderId, 'mock'>): ProviderPreset {
   const preset = PROVIDER_PRESETS.find((p) => p.id === id);
-  if (!preset) throw new Error(`Provider inconnu : ${id}`);
+  if (!preset) throw new Error(`Unknown provider: ${id}`);
   return preset;
 }
 

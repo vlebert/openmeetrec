@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "OpenMeetRec",
   "version": "0.1.0",
-  "description": "Enregistre et transcrit l'audio de vos visioconférences web, sans bot ni cloud imposé.",
+  "description": "Records and transcribes the audio of your web video conferences, no bot, no imposed cloud.",
   "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads"],
   "host_permissions": ["https://api.mistral.ai/*", "https://api.openai.com/*"],
   "optional_host_permissions": ["<all_urls>"],

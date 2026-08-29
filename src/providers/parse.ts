@@ -11,7 +11,7 @@ import type { Segment, TranscriptionResult } from '@/shared/types';
 
 export function parseTranscription(payload: unknown): TranscriptionResult {
   const root = asRecord(payload);
-  if (!root) throw new Error('réponse de transcription illisible');
+  if (!root) throw new Error('unreadable transcription response');
 
   const segments = parseSegments(root['segments']);
   const text = typeof root['text'] === 'string' ? root['text'] : segmentsText(segments);

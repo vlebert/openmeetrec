@@ -27,7 +27,9 @@ Fait :
   → merge → markdown téléchargé), `npm run test:e2e`.
 - Transcription : providers Mistral / OpenAI / custom, pipeline chunks → merge → export Markdown,
   téléchargement en fin de session.
-- UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options).
+- UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options), en anglais.
+- Badge « REC » sur l'icône de la barre d'outils pendant l'enregistrement : reste visible même si
+  le popup s'est refermé (changement d'onglet, clic ailleurs).
 
 À venir :
 
@@ -44,7 +46,8 @@ Fait :
   l'utilisateur invoque lui-même l'extension ; aucune automatisation ne peut l'obtenir. Le test
   d'intégration substitue la stratégie de capture et couvre tout ce qui vient après.
 - Les identifiants de locuteurs sont attribués chunk par chunk et ne sont pas rapprochés entre
-  chunks ; le markdown exporté le signale.
+  chunks ; le markdown exporté le signale, et une section « Chunk N » sépare visuellement le texte
+  de chaque chunk pour rendre ce reset repérable.
 - **Les timestamps renvoyés par le provider sont repris tels quels.** Un provider qui daterait un
   segment hors des bornes de son propre chunk produirait un transcript incohérent, sans
   avertissement. Constaté en test avec un faux endpoint mal réglé ; reste à décider s'il faut

@@ -119,6 +119,40 @@ describe('buildBody', () => {
     );
     expect(body).toBe('> Un. Deux.');
   });
+
+  it('insère des sections de chunk quand des bornes sont fournies', () => {
+    const body = buildBody(
+      doc({
+        diarized: true,
+        chunkBoundaries: [100],
+        segments: [
+          { text: 'Avant.', start: 0, end: 5, speakerId: '0' },
+          { text: 'Après.', start: 120, end: 125, speakerId: '0' },
+        ],
+      }),
+    );
+    expect(body).toBe(
+      [
+        '> **Chunk 1**',
+        '>',
+        '> **Speaker 0** (00:00:00): Avant.',
+        '>',
+        '> **Chunk 2**',
+        '>',
+        '> **Speaker 0** (00:02:00): Après.',
+      ].join('\n'),
+    );
+  });
+
+  it('ne montre aucune section sans bornes de chunk', () => {
+    const body = buildBody(
+      doc({
+        diarized: true,
+        segments: [{ text: 'Bonjour.', start: 0, end: 1, speakerId: '0' }],
+      }),
+    );
+    expect(body).not.toContain('Chunk');
+  });
 });
 
 describe('buildWarnings', () => {
@@ -128,7 +162,7 @@ describe('buildWarnings', () => {
 
   it('prévient des doublons quand il n y a pas de timestamps', () => {
     const warnings = buildWarnings(doc({ hadSegments: false, chunkCount: 3 }));
-    expect(warnings.join(' ')).toContain('double');
+    expect(warnings.join(' ')).toContain('duplicat');
   });
 
   it('ne prévient pas des doublons sur un chunk unique', () => {

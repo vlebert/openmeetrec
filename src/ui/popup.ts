@@ -88,7 +88,7 @@ function render(): void {
   const recording = current.status === 'recording';
   const busy = current.status === 'processing';
 
-  el.toggle.textContent = recording ? 'Arrêter' : 'Démarrer';
+  el.toggle.textContent = recording ? 'Stop' : 'Start';
   el.toggle.disabled = busy || (!recording && tabId === null);
   el.status.textContent = statusLabel(current);
   el.timer.hidden = !recording;
@@ -108,19 +108,19 @@ function render(): void {
 function statusLabel(current: SessionState): string {
   switch (current.status) {
     case 'idle':
-      return tabId === null ? 'Aucun onglet cible' : 'Prêt à enregistrer';
+      return tabId === null ? 'No target tab' : 'Ready to record';
     case 'recording':
-      return `Enregistrement — ${current.chunkCount} chunk(s)`;
+      return `Recording — ${current.chunkCount} chunk(s)`;
     case 'processing':
       return current.progress
-        ? `Transcription ${current.progress.done}/${current.progress.total}…`
-        : 'Finalisation…';
+        ? `Transcribing ${current.progress.done}/${current.progress.total}…`
+        : 'Finishing…';
     case 'done':
       return current.downloads.length > 0
-        ? `Terminé — ${current.downloads.join(', ')}`
-        : `Terminé — ${current.chunkCount} chunk(s), ${formatTimestamp(current.duration)}`;
+        ? `Done — ${current.downloads.join(', ')}`
+        : `Done — ${current.chunkCount} chunk(s), ${formatTimestamp(current.duration)}`;
     case 'error':
-      return 'Erreur';
+      return 'Error';
   }
 }
 
@@ -145,6 +145,6 @@ function hostOf(url: string): string {
 
 function byId<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
-  if (!element) throw new Error(`élément #${id} absent du popup`);
+  if (!element) throw new Error(`element #${id} missing from popup`);
   return element as T;
 }

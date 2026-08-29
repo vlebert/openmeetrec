@@ -1,20 +1,19 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>OpenMeetRec — autorisation micro</title>
+    <title>OpenMeetRec — microphone permission</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main style="width: 420px">
-      <h1>Autoriser le micro</h1>
+      <h1>Allow microphone access</h1>
       <p>
-        L'enregistrement se fait dans un document interne à l'extension, qui ne
-        peut pas afficher lui-même la demande d'autorisation. Cliquez ci-dessous
-        puis acceptez la demande du navigateur : l'autorisation est ensuite
-        valable pour toutes vos sessions.
+        Recording happens in a document internal to the extension, which cannot
+        show the permission prompt itself. Click below and accept the browser's
+        request: the permission is then valid for all your sessions.
       </p>
-      <button id="grant" type="button">Demander l'accès au micro</button>
+      <button id="grant" type="button">Request microphone access</button>
       <p id="result" class="status"></p>
     </main>
     <script type="module" src="mic-permission.js"></script>

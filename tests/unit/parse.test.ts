@@ -60,6 +60,6 @@ describe('parseTranscription', () => {
   });
 
   it('refuse une réponse qui n’est pas un objet', () => {
-    expect(() => parseTranscription('nope')).toThrow(/illisible/);
+    expect(() => parseTranscription('nope')).toThrow(/unreadable/);
   });
 });

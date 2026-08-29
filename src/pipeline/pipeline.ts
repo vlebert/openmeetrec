@@ -4,7 +4,7 @@
  * MockProvider et sans navigateur.
  */
 
-import { mergeSegments, mergeTexts, segmentsToText } from '@/audio/merge';
+import { chunkBoundaries, mergeSegments, mergeTexts, segmentsToText } from '@/audio/merge';
 import { DEFAULT_CONCURRENCY, mapLimitSettled } from '@/pipeline/concurrency';
 import type { TranscriptionProvider } from '@/providers/base';
 import type { ChunkInfo, Segment, TranscribeOpts } from '@/shared/types';
@@ -34,6 +34,8 @@ export interface TranscriptionOutcome {
   failures: ChunkFailure[];
   /** Chunks effectivement transcrits. */
   transcribedCount: number;
+  /** Vide hors mode segments : les sections par chunk n'ont de sens qu'avec des timestamps. */
+  chunkBoundaries: number[];
 }
 
 export async function runTranscription(run: TranscriptionRun): Promise<TranscriptionOutcome> {
@@ -77,6 +79,7 @@ export async function runTranscription(run: TranscriptionRun): Promise<Transcrip
       failedChunks: failures.map((f) => f.index),
       failures,
       transcribedCount: okChunks.length,
+      chunkBoundaries: [],
     };
   }
 
@@ -88,6 +91,7 @@ export async function runTranscription(run: TranscriptionRun): Promise<Transcrip
     failedChunks: failures.map((f) => f.index),
     failures,
     transcribedCount: okChunks.length,
+    chunkBoundaries: chunkBoundaries(okChunks),
   };
 }
 

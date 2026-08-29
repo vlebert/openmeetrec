@@ -1,55 +1,55 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>OpenMeetRec — réglages</title>
+    <title>OpenMeetRec — settings</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main>
-      <h1>Réglages</h1>
+      <h1>Settings</h1>
 
       <fieldset>
         <legend>Transcription</legend>
 
-        <label for="provider">Fournisseur</label>
+        <label for="provider">Provider</label>
         <select id="provider"></select>
 
-        <label for="model">Modèle</label>
+        <label for="model">Model</label>
         <select id="model"></select>
-        <input id="model-custom" type="text" placeholder="identifiant du modèle" hidden />
+        <input id="model-custom" type="text" placeholder="model id" hidden />
 
-        <label for="api-key">Clé API</label>
+        <label for="api-key">API key</label>
         <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
         <p class="hint" id="key-hint"></p>
-        <button id="test-key" type="button">Tester la clé</button>
+        <button id="test-key" type="button">Test key</button>
         <span id="test-result" class="hint"></span>
       </fieldset>
 
       <fieldset id="custom-fields" hidden>
-        <legend>Endpoint custom</legend>
+        <legend>Custom endpoint</legend>
         <label for="custom-endpoint">URL (HTTPS)</label>
         <input id="custom-endpoint" type="url" placeholder="https://…/v1/audio/transcriptions" />
-        <label class="check"><input type="checkbox" id="custom-segments" /> Renvoie des segments horodatés</label>
-        <label class="check"><input type="checkbox" id="custom-diarization" /> Fait de la diarization</label>
+        <label class="check"><input type="checkbox" id="custom-segments" /> Returns timestamped segments</label>
+        <label class="check"><input type="checkbox" id="custom-diarization" /> Does speaker diarization</label>
         <p class="hint">
-          Un endpoint custom nécessite une autorisation d'accès réseau supplémentaire,
-          demandée au moment de l'enregistrement.
+          A custom endpoint requires an extra network access permission,
+          requested when you save.
         </p>
       </fieldset>
 
       <fieldset>
-        <legend>Sortie</legend>
-        <label class="check"><input type="checkbox" id="diarize" /> Identifier les locuteurs</label>
+        <legend>Output</legend>
+        <label class="check"><input type="checkbox" id="diarize" /> Identify speakers</label>
         <p class="hint" id="diarize-hint"></p>
-        <label class="check"><input type="checkbox" id="download-audio" /> Télécharger aussi l'audio</label>
-        <label for="language">Langue</label>
+        <label class="check"><input type="checkbox" id="download-audio" /> Also download the audio</label>
+        <label for="language">Language</label>
         <input id="language" type="text" placeholder="auto" size="8" />
-        <p class="hint">Code ISO (fr, en…) ; vide = détection automatique.</p>
+        <p class="hint">ISO code (en, fr…); empty = automatic detection.</p>
       </fieldset>
 
       <div class="actions">
-        <button id="save" type="button">Enregistrer</button>
+        <button id="save" type="button">Save</button>
         <span id="status" class="hint"></span>
       </div>
 

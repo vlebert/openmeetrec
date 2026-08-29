@@ -97,7 +97,7 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
     try {
       return await response.json();
     } catch (error) {
-      throw new ProviderError(this.id, `réponse JSON invalide : ${String(error)}`, response.status);
+      throw new ProviderError(this.id, `invalid JSON response: ${String(error)}`, response.status);
     }
   }
 

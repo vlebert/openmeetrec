@@ -18,7 +18,7 @@ export class TabCaptureStrategy implements CaptureStrategy {
       chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (id) => {
         const lastError = chrome.runtime.lastError;
         if (lastError) reject(new Error(lastError.message));
-        else if (!id) reject(new Error('identifiant de flux vide'));
+        else if (!id) reject(new Error('empty stream id'));
         else resolve(id);
       });
     });

@@ -75,10 +75,10 @@ function render(): void {
 
   const storedKey = config.apiKeys[config.provider];
   el.apiKey.value = keyEdited ? el.apiKey.value : '';
-  el.apiKey.placeholder = storedKey ? maskApiKey(storedKey) : 'sk-…';
+  el.apiKey.placeholder = storedKey ? maskApiKey(storedKey) : 'API key';
   el.keyHint.textContent = storedKey
-    ? 'Une clé est enregistrée. Laissez vide pour la conserver.'
-    : 'Stockée localement, jamais envoyée ailleurs qu’au fournisseur choisi.';
+    ? 'A key is saved. Leave empty to keep it.'
+    : 'Stored locally, never sent anywhere except the chosen provider.';
 
   el.customFields.hidden = config.provider !== 'custom';
   el.customEndpoint.value = config.customEndpoint ?? '';
@@ -89,8 +89,8 @@ function render(): void {
   el.diarize.checked = config.diarize && canDiarize;
   el.diarize.disabled = !canDiarize;
   el.diarizeHint.textContent = canDiarize
-    ? 'Les locuteurs sont numérotés chunk par chunk : les numéros ne se suivent pas d’un chunk à l’autre.'
-    : `${preset.label} ne fait pas de diarization.`;
+    ? 'Speakers are numbered chunk by chunk: the numbers are not consistent from one chunk to the next.'
+    : `${preset.label} does not do diarization.`;
 
   el.downloadAudio.checked = config.downloadAudio;
   el.language.value = config.language ?? '';
@@ -122,13 +122,13 @@ function collect(): Config {
 async function onSave(): Promise<void> {
   const next = collect();
   if (next.provider === 'custom' && !(await ensureHostPermission(next.customEndpoint ?? ''))) {
-    el.status.textContent = 'Autorisation réseau refusée pour cet endpoint.';
+    el.status.textContent = 'Network permission denied for this endpoint.';
     return;
   }
   config = next;
   await saveConfig(config);
   keyEdited = false;
-  el.status.textContent = 'Enregistré.';
+  el.status.textContent = 'Saved.';
   setTimeout(() => {
     el.status.textContent = '';
   }, 2000);
@@ -137,10 +137,10 @@ async function onSave(): Promise<void> {
 
 async function onTestKey(): Promise<void> {
   el.testKey.disabled = true;
-  el.testResult.textContent = 'Test en cours…';
+  el.testResult.textContent = 'Testing…';
   try {
     const provider = createProvider(collect());
-    el.testResult.textContent = (await provider.testKey()) ? 'Clé valide.' : 'Clé refusée.';
+    el.testResult.textContent = (await provider.testKey()) ? 'Valid key.' : 'Key rejected.';
   } catch (error) {
     el.testResult.textContent = error instanceof Error ? error.message : String(error);
   } finally {
@@ -176,6 +176,6 @@ function showProblems(): void {
 
 function byId<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
-  if (!element) throw new Error(`élément #${id} absent de la page d'options`);
+  if (!element) throw new Error(`element #${id} missing from the options page`);
   return element as T;
 }

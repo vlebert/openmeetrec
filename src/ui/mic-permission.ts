@@ -15,9 +15,9 @@ grant.addEventListener('click', () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       for (const track of stream.getTracks()) track.stop();
-      result.textContent = 'Micro autorisé. Vous pouvez fermer cet onglet et relancer l’enregistrement.';
+      result.textContent = 'Microphone allowed. You can close this tab and start recording again.';
     } catch (error) {
-      result.textContent = `Refusé : ${error instanceof Error ? error.message : String(error)}`;
+      result.textContent = `Denied: ${error instanceof Error ? error.message : String(error)}`;
       grant.disabled = false;
     }
   })();

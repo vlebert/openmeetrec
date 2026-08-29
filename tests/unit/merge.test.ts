@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   adjustTimestamps,
+  chunkBoundaries,
   countSpeakers,
   mergeSegments,
   mergeTexts,
@@ -125,5 +126,22 @@ describe('segmentsToText / countSpeakers', () => {
   it('compte les speakers distincts', () => {
     expect(countSpeakers([seg('a', 0, 1, '0'), seg('b', 1, 2, '1'), seg('c', 2, 3, '0')])).toBe(2);
     expect(countSpeakers([seg('a', 0, 1)])).toBe(0);
+  });
+});
+
+describe('chunkBoundaries', () => {
+  it('renvoie une liste vide sous deux chunks', () => {
+    expect(chunkBoundaries([])).toEqual([]);
+    expect(chunkBoundaries([{ index: 0, start: 0, end: 300 }])).toEqual([]);
+  });
+
+  it('place une borne au milieu de chaque recouvrement', () => {
+    const chunks: ChunkInfo[] = [
+      { index: 0, start: 0, end: 300 },
+      { index: 1, start: 270, end: 570 },
+      { index: 2, start: 540, end: 700 },
+    ];
+    // Milieux des recouvrements : (300+270)/2 = 285, (570+540)/2 = 555.
+    expect(chunkBoundaries(chunks)).toEqual([285, 555]);
   });
 });

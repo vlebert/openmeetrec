@@ -133,7 +133,7 @@ export class ChunkScheduler {
     };
     recorder.onerror = () => {
       this.live.delete(index);
-      this.deps.onError?.(new Error(`échec du recorder du chunk ${index}`));
+      this.deps.onError?.(new Error(`chunk ${index} recorder failed`));
       chunk.settle();
     };
 

@@ -29,6 +29,20 @@ function overlapMidpoint(previous: ChunkInfo, next: ChunkInfo): number {
 }
 
 /**
+ * Timestamp absolu à partir duquel chaque chunk, à partir du deuxième,
+ * commence à contribuer au texte fusionné (mêmes bornes que `mergeSegments`,
+ * pour que les sections affichées dans l'export correspondent exactement à ce
+ * qui a été retenu de chaque chunk).
+ */
+export function chunkBoundaries(chunks: readonly ChunkInfo[]): number[] {
+  const bounds: number[] = [];
+  for (let i = 1; i < chunks.length; i += 1) {
+    bounds.push(overlapMidpoint(chunks[i - 1]!, chunks[i]!));
+  }
+  return bounds;
+}
+
+/**
  * Fusionne les segments de chunks recouvrants en une liste unique.
  *
  * Pour chaque zone d'overlap, on garde les segments du chunk de gauche jusqu'au
