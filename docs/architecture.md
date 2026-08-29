@@ -451,7 +451,8 @@ Le plus rentable, car la logique fragile est **pure** :
 
 ### 10.3 Niveau 3 — Intégration (Playwright headful, extension unpacked)
 
-Chromium headful sous xvfb, `--load-extension` :
+Chromium headful sur le display VNC de la machine (`DISPLAY=:1`, pas besoin de xvfb),
+`--load-extension` :
 
 - `record.spec.ts` : popup → Start sur `meeting-page.html` → Stop → assert `.md` téléchargé avec
   frontmatter + blockquote.
@@ -481,7 +482,7 @@ Réutilisable pour le path Firefox plus tard.
 ### 10.6 CI
 
 - `npm test` : Vitest (unitaires) → rapide.
-- `npm run test:e2e` : Playwright headful sous xvfb.
+- `npm run test:e2e` : Playwright headful sur `DISPLAY=:1`.
 
 ### 10.7 Synthèse
 

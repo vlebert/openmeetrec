@@ -16,7 +16,7 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
 ## Testing
 
 - Unitaires : Vitest sur `tests/unit/`.
-- Intégration : Playwright headful (sous xvfb) charge l'extension unpacked + page fixture WebRTC dans `tests/fixtures/meeting-page.html`.
+- Intégration : Playwright headful sur le display VNC existant (`DISPLAY=:1`) charge l'extension unpacked + page fixture WebRTC dans `tests/fixtures/meeting-page.html`.
 - Firefox exploratoire : `firefox-mcp` (Firefox réel VNC) — voir `docs/testing-firefox.md` (à créer).
 - Ne pas ajouter de dépendance sans justification.
 
