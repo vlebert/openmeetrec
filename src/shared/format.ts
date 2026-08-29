@@ -5,7 +5,7 @@
  */
 
 import type { Segment, SessionMeta } from '@/shared/types';
-import { countSpeakers } from '@/audio/merge';
+import { countSpeakers, groupSegmentsBySpeaker } from '@/audio/merge';
 
 export interface TranscriptDocument {
   meta: SessionMeta;
@@ -97,17 +97,18 @@ export function buildWarnings(doc: TranscriptDocument): string[] {
 export function buildBody(doc: TranscriptDocument): string {
   if (doc.diarized && doc.segments && doc.segments.length > 0) {
     const boundaries = doc.chunkBoundaries ?? [];
+    const turns = groupSegmentsBySpeaker(doc.segments, boundaries);
     const lines: string[] = [];
     let chunkNumber = 1;
     if (boundaries.length > 0) lines.push(`**Chunk ${chunkNumber}**`);
-    doc.segments.forEach((seg) => {
-      while (chunkNumber - 1 < boundaries.length && seg.start >= boundaries[chunkNumber - 1]!) {
+    turns.forEach((turn) => {
+      while (chunkNumber - 1 < boundaries.length && turn.start >= boundaries[chunkNumber - 1]!) {
         chunkNumber += 1;
         if (lines.length > 0) lines.push('');
         lines.push(`**Chunk ${chunkNumber}**`);
       }
       if (lines.length > 0) lines.push('');
-      lines.push(`**${formatSpeaker(seg.speakerId)}** (${formatTimestamp(seg.start)}): ${seg.text.trim()}`);
+      lines.push(`**${formatSpeaker(turn.speakerId)}** (${formatTimestamp(turn.start)}): ${turn.text}`);
     });
     return lines.join('\n');
   }
