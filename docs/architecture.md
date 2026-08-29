@@ -1,49 +1,58 @@
 # OpenMeetRec — Architecture
 
-> Version 0.2. MVP Chromium. Firefox hors scope mais point d'extension prévu.
+> Version 0.3. MVP Chromium. Firefox hors scope mais point d'extension prévu.
+>
+> Changements v0.2 → v0.3 : surface de contrôle en **popup** (ciblage explicite de l'onglet),
+> chunking par **recorders décalés** au lieu du record-then-slice, providers distinguant
+> `supportsSegments` de `supportsDiarization`, permissions réseau restreintes aux hôtes des providers.
 
 ## 1. Vue d'ensemble
 
 ```
-┌─────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────┐
 │  UI                                                           │
-│  - record.html (onglet plein écran) : Start/Stop, meters,     │
-│    statut, progression, download                             │
-│  - options.html : provider/modèle, clés API, diarization,    │
+│  - popup.html : ouvert SUR l'onglet de visio → Start/Stop,    │
+│    meters, durée, statut court                                │
+│  - record.html : page de session (progression par chunk,      │
+│    erreurs, download)                                         │
+│  - options.html : provider/modèle, clés API, diarization,     │
 │    option audio                                               │
-└───────────────┬─────────────────────────────────────────────┘
+└───────────────┬──────────────────────────────────────────────┘
                 │ chrome.runtime messaging
-┌───────────────▼─────────────────────────────────────────────┐
-│  Background service worker (MV3)                             │
-│  - orchestre record (start/stop)                             │
-│  - CaptureStrategy picker (feature detection)               │
-│  - crée l'offscreen document                                 │
-│  - gère config (chrome.storage.local) + clés API             │
-└───────┬────────────────────────────────────────────────────────┘
+┌───────────────▼──────────────────────────────────────────────┐
+│  Background service worker (MV3)                              │
+│  - machine à états de la session (idle/recording/processing)  │
+│  - CaptureStrategy picker (feature detection)                 │
+│  - getMediaStreamId({ targetTabId }) sur l'onglet du popup    │
+│  - crée et pilote l'offscreen document                        │
+│  - gère config (chrome.storage.local) + clés API              │
+└───────┬───────────────────────────────────────────────────────┘
         │
-   ┌────▼──────────────────────────────────────────────────┐
-   │ Offscreen document                                     │
-   │ - tient getUserMedia (micro) + tabCapture (onglet)     │
-   │ - mix Web Audio → MediaRecorder (webm/opus)            │
-   │ - accumulation OPFS pour les longs enregistrements     │
-   └────┬──────────────────────────────────────────────────┘
-        │ blob / OPFS
-   ┌────▼──────────────────────────────────────────────────┐
-   │ Audio pipeline (TS pur + Web Audio + WebCodecs)        │
-   │ decode → chunk (overlap) → re-encode opus → storage    │
-   └────┬──────────────────────────────────────────────────┘
+   ┌────▼───────────────────────────────────────────────────┐
+   │ Offscreen document                                      │
+   │ - getUserMedia (micro) + getUserMedia (tab, streamId)   │
+   │ - mix Web Audio → mono                                  │
+   │ - ré-injection du son de l'onglet vers la sortie        │
+   │ - ChunkScheduler : recorders décalés → chunks OPFS      │
+   │ - recorder continu (optionnel) → piste complète OPFS    │
+   └────┬───────────────────────────────────────────────────┘
+        │ chunks (Blob webm/opus) + ChunkInfo
+   ┌────▼───────────────────────────────────────────────────┐
+   │ Pipeline (TS pur + orchestration)                       │
+   │ chunks → transcribe (concurrence limitée) → merge       │
+   └────┬───────────────────────────────────────────────────┘
         │
-   ┌────▼──────────────────────────────────────────────────┐
-   │ Providers (transcription)                             │
-   │ - MistralProvider (Voxtral + diarization)             │
-   │ - OpenAIProvider (Whisper)                             │
-   │ - CustomProvider (endpoint + modèle libres)           │
-   │ - MockProvider (tests)                                 │
-   └────┬──────────────────────────────────────────────────┘
+   ┌────▼───────────────────────────────────────────────────┐
+   │ Providers (transcription)                               │
+   │ - MistralProvider (Voxtral, segments + diarization)     │
+   │ - OpenAIProvider (Whisper, segments)                    │
+   │ - CustomProvider (endpoint + modèle libres)             │
+   │ - MockProvider (tests)                                  │
+   └────┬───────────────────────────────────────────────────┘
         │
-   ┌────▼──────────────────────────────────────────────────┐
-   │ Merge (crossfade/concat) → format Markdown → download  │
-   └───────────────────────────────────────────────────────┘
+   ┌────▼───────────────────────────────────────────────────┐
+   │ Merge (coupe à mi-overlap) → Markdown → download        │
+   └────────────────────────────────────────────────────────┘
 ```
 
 ## 2. Structure de fichiers (cible)
@@ -58,42 +67,46 @@ openmeetrec/
 ├── src/
 │   ├── manifest.json              # base Chromium MV3
 │   ├── background/
-│   │   ├── service-worker.ts       # orchestration, capture picker
-│   │   └── messaging.ts
+│   │   ├── service-worker.ts       # machine à états, capture picker
+│   │   └── session.ts              # état de session partagé
 │   ├── offscreen/
 │   │   ├── offscreen.html
-│   │   └── offscreen.ts            # getUserMedia + tabCapture + mix + recorder
+│   │   └── offscreen.ts            # micro + tab + mix + ChunkScheduler
 │   ├── capture/
 │   │   ├── strategy.ts             # interface CaptureStrategy
 │   │   ├── tabCaptureStrategy.ts   # Chromium (MVP)
-│   │   ├── webrtcStrategy.ts        # Firefox (coquille vide, post-MVP)
+│   │   ├── webrtcStrategy.ts       # Firefox (coquille vide, post-MVP)
 │   │   └── detect.ts               # feature detection
 │   ├── audio/
-│   │   ├── mix.ts                  # mix micro + onglet → mono
-│   │   ├── recorder.ts             # wrapper MediaRecorder
-│   │   ├── chunking.ts             # split + overlap (port de chunking.py)
-│   │   ├── merge.ts                # merge_segments / merge_texts (port)
-│   │   └── encode.ts               # WebCodecs AudioEncoder (opus) + fallback
+│   │   ├── mix.ts                  # mix micro + onglet → mono + monitoring
+│   │   ├── chunkScheduler.ts       # recorders décalés (browser)
+│   │   ├── chunking.ts             # planification des chunks (PUR)
+│   │   ├── merge.ts                # merge segments / textes (PUR)
+│   │   └── encode.ts               # resample 16 kHz mono, fallback API
 │   ├── pipeline/
-│   │   ├── pipeline.ts             # record → chunk → transcribe → merge → export
-│   │   └── concurrency.ts          # sémaphore (Promise.all limité)
+│   │   ├── pipeline.ts             # chunks → transcribe → merge → export
+│   │   └── concurrency.ts          # sémaphore / mapLimit (PUR)
 │   ├── providers/
-│   │   ├── base.ts                 # Provider interface
+│   │   ├── base.ts                 # interface + erreurs
 │   │   ├── mistral.ts              # Voxtral + diarization
-│   │   ├── openai.ts               # Whisper
+│   │   ├── openai.ts               # Whisper verbose_json
 │   │   ├── custom.ts               # endpoint + modèle libres
-│   │   └── mock.ts                 # tests
+│   │   ├── mock.ts                 # tests
+│   │   ├── registry.ts             # presets, résolution provider (PUR)
+│   │   └── retry.ts                # backoff (PUR)
 │   ├── storage/
-│   │   ├── opfs.ts                 # OPFS read/write
+│   │   ├── opfs.ts                 # OPFS read/write/append
 │   │   └── export.ts               # download markdown + audio
 │   ├── config/
-│   │   └── config.ts               # schéma chrome.storage.local
+│   │   └── config.ts               # schéma + defaults + validation (PUR)
 │   ├── ui/
+│   │   ├── popup.html / popup.ts
 │   │   ├── record.html / record.ts
 │   │   └── options.html / options.ts
 │   └── shared/
-│       ├── types.ts                # Segment, ChunkInfo, Config…
-│       └── format.ts               # frontmatter + blockquote
+│       ├── types.ts                # Segment, ChunkInfo, Config, messages
+│       ├── messages.ts             # protocole de messaging typé
+│       └── format.ts               # frontmatter + blockquote (PUR)
 ├── tests/
 │   ├── unit/                       # Vitest
 │   ├── integration/                # Playwright headful
@@ -101,10 +114,13 @@ openmeetrec/
 │       ├── meeting-page.html        # visio factice (RTCPeerConnection + sine)
 │       └── audio/                  # webm/opus d'exemple
 ├── scripts/
-│   └── build.mjs                   # build (Chromium ; Firefox post-MVP)
+│   └── build.mjs                   # orchestration build + copie manifest/assets
 ├── package.json tsconfig.json vite.config.ts
 └── README.md
 ```
+
+**Règle d'architecture.** Les modules marqués `(PUR)` n'importent jamais `chrome`/`browser` ni d'API DOM.
+C'est là que vit la logique fragile, et c'est ce qui est couvert par Vitest.
 
 ## 3. Stratégie de capture
 
@@ -122,11 +138,24 @@ interface CaptureStrategy {
 
 ### 3.2 `tabCaptureStrategy` (MVP, Chromium)
 
-1. Service worker : `chrome.tabCapture.getMediaStreamId({ targetTabId })` après clic sur Start (user gesture).
-2. StreamId passé à l'offscreen document.
-3. Offscreen : `getUserMedia({ audio: { chromeMediaSource: 'tab', streamId } })` pour l'onglet + `getUserMedia({ audio: true })` pour le micro.
-4. Mix via Web Audio (`MediaStreamAudioSourceNode` × 2 → `MediaStreamAudioDestinationNode` mono).
-5. `MediaRecorder` sur le flux mixé → webm/opus.
+Le popup est ouvert **sur l'onglet de visio** : le clic sur l'icône accorde `activeTab` sur cet onglet
+précis, et le popup connaît son `tabId` via `chrome.tabs.query({ active: true, currentWindow: true })`.
+C'est ce `tabId` qui est transmis au service worker, ce qui supprime toute ambiguïté sur la cible.
+
+1. Popup → SW : `START_RECORDING { tabId, tabUrl }` (dans le geste utilisateur).
+2. SW : `chrome.tabCapture.getMediaStreamId({ targetTabId: tabId })` — pas de `consumerTabId`, le
+   stream sera consommé par l'offscreen document de l'extension.
+3. SW : crée l'offscreen document (`reasons: ['USER_MEDIA']`) s'il n'existe pas, lui passe le `streamId`.
+4. Offscreen :
+   - onglet : `getUserMedia({ audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } } })`
+   - micro : `getUserMedia({ audio: true })`
+5. Mix Web Audio : deux `MediaStreamAudioSourceNode` → `GainNode` → `MediaStreamAudioDestinationNode` mono.
+6. **Ré-injection** : la source « onglet » est aussi connectée à `audioContext.destination`, sinon
+   `tabCapture` détourne le son et l'utilisateur n'entend plus la visio (F-CAP-06). Le micro n'est
+   *jamais* ré-injecté (larsen).
+7. `ChunkScheduler` sur le flux mixé (§4).
+
+Le popup peut se fermer immédiatement après : l'état vit dans le SW + l'offscreen document (NF-07).
 
 ### 3.3 Détection
 
@@ -138,27 +167,73 @@ function detectStrategy(): CaptureStrategy {
 }
 ```
 
-## 4. Pipeline audio (port de supervoxtral)
+## 4. Chunking au fil de l'eau
 
-Mapping depuis `~/dev/py/supervoxtral/svx/core/` :
+### 4.1 Pourquoi pas le record-then-slice
+
+La v0.2 prévoyait : enregistrement complet → `decodeAudioData` → slicing → ré-encodage. Un
+`AudioBuffer` d'1 h à 48 kHz mono en float32 pèse ~690 Mo, alloués d'un coup dans l'offscreen
+document. Écarté pour NF-08.
+
+### 4.2 Recorders décalés
+
+Avec `chunkDuration = 300 s` et `overlap = 30 s`, le pas est `step = 270 s`. Le chunk `i` couvre
+`[i·step, i·step + chunkDuration]`. Deux `MediaRecorder` alternent sur le **même** `MediaStream` mixé,
+décalés de `step` :
+
+```
+t=0      A ────────────────────────► chunk 0  [0, 300]
+t=270            B ────────────────────────► chunk 1  [270, 570]
+t=540    A ────────────────────────► chunk 2  [540, 840]
+t=810            B ...
+```
+
+Au plus deux recorders actifs simultanément ; chaque `MediaRecorder` produit un webm **autonome et
+décodable**. Chaque chunk terminé est écrit en OPFS puis poussé au pipeline — la transcription peut
+donc démarrer avant la fin de la réunion. L'empreinte mémoire ne dépend pas de la durée.
+
+Un **troisième recorder continu** (avec `timeslice`, fragments appendés en OPFS) tourne uniquement si
+l'option « télécharger l'audio » est active, pour produire la piste complète (F-AUD-08).
+
+### 4.3 Fin d'enregistrement
+
+Au Stop, les recorders actifs sont arrêtés et leur chunk partiel récupéré. Deux cas particuliers :
+
+- Le dernier chunk peut être plus court que `chunkDuration` — normal, on le garde.
+- Si le Stop tombe dans la zone d'overlap, le dernier chunk peut être **entièrement contenu** dans le
+  précédent (ex. stop à t=280 → chunk 1 = `[270, 280]`). Il est alors **écarté** : il n'apporte aucun
+  contenu neuf et polluerait le merge.
+
+### 4.4 Logique pure vs plomberie
+
+| Pur (Vitest) | Navigateur |
+|---|---|
+| `planChunks(totalDuration, opts)` → `ChunkInfo[]` attendus | `ChunkScheduler` : timers, MediaRecorder |
+| Règle d'écart du dernier chunk | Écriture OPFS |
+| `merge.ts` (offsets, coupe à mi-overlap) | — |
+
+`planChunks` reproduit exactement la boucle de `split_audio` (supervoxtral) et sert à la fois de
+prédiction (progression « chunk N/M ») et d'oracle de test pour le scheduler.
+
+### 4.5 Mapping depuis supervoxtral
+
+Depuis `~/dev/py/supervoxtral/svx/core/` :
 
 | supervoxtral (Python) | OpenMeetRec (TS) | Notes |
 |---|---|---|
-| `audio.convert_audio` (ffmpeg) | `audio/encode.ts` | MediaRecorder produit déjà webm/opus ; resample 16k seulement si requis par l'API |
-| `chunking.split_audio` (soundfile/ffmpeg) | `audio/chunking.ts` | decodeAudioData → slice Float32Array overlap → re-encode |
-| `chunking.merge_segments` (crossfade) | `audio/merge.ts` | port TS pur |
-| `chunking.merge_texts` (concat) | `audio/merge.ts` | port TS pur |
-| `pipeline._transcribe_chunked` (ThreadPool) | `pipeline/concurrency.ts` | sémaphore Promise.all(4) |
+| `chunking.split_audio` (boucle start/step) | `audio/chunking.ts` `planChunks` | port pur ; le découpage réel est fait par le scheduler |
+| `chunking.merge_segments` (coupe à mi-overlap) | `audio/merge.ts` `mergeSegments` | port TS pur, 1:1 |
+| `chunking._adjust_timestamps` | `audio/merge.ts` `adjustTimestamps` | port TS pur |
+| `chunking.merge_texts` (concat) | `audio/merge.ts` `mergeTexts` | fallback F-TR-07 uniquement |
+| `pipeline._transcribe_chunked` (ThreadPool) | `pipeline/concurrency.ts` `mapLimit` | sémaphore, 4 en parallèle |
 | `providers/mistral.MistralProvider` | `providers/mistral.ts` | fetch Voxtral + diarization |
-| `meeting_audio.record_dual_wav` | `offscreen.ts` mix | micro + onglet → mono |
+| `audio.convert_audio` (ffmpeg) | `audio/encode.ts` | resample 16 kHz mono seulement si l'API le réclame |
+| `meeting_audio.record_dual_wav` | `audio/mix.ts` | micro + onglet → mono |
 
-### 4.1 Chunking — détail (stratégie A, record-then-slice)
-
-1. Enregistrement complet → blob webm/opus (accumulation OPFS si long).
-2. `AudioContext.decodeAudioData` → `AudioBuffer` (PCM float32).
-3. Slicing sample-accurate : chunks 300 s, overlap 30 s, `step = 270 s`.
-4. Re-encodage opus : **WebCodecs `AudioEncoder`** si dispo, sinon `MediaRecorder` sur un `MediaStream` reconstruit via `AudioBufferSourceNode → MediaStreamAudioDestinationNode`.
-5. `ChunkInfo { index, start, end }` (port direct).
+**Divergence assumée.** `merge_texts` concatène brutalement et compte sur l'étape 2 LLM de
+supervoxtral pour nettoyer l'overlap dupliqué. Cette étape 2 est hors scope MVP, donc on ne peut pas
+s'appuyer dessus : le chemin nominal passe **toujours** par `mergeSegments` (§5.2), et `mergeTexts`
+n'est qu'un fallback signalé à l'utilisateur.
 
 ## 5. Providers
 
@@ -167,37 +242,57 @@ Mapping depuis `~/dev/py/supervoxtral/svx/core/` :
 ```ts
 interface TranscriptionProvider {
   readonly id: 'mistral' | 'openai' | 'custom' | 'mock';
-  readonly supportsDiarization: boolean;
+  readonly supportsSegments: boolean;      // timestamps par segment
+  readonly supportsDiarization: boolean;   // speaker_id sur les segments
   transcribe(audio: Blob, opts: TranscribeOpts): Promise<TranscriptionResult>;
-  testKey(): Promise<boolean>;  // pour le bouton « tester la clé »
+  testKey(): Promise<boolean>;             // bouton « tester la clé »
 }
 
 interface TranscribeOpts {
   model: string;
-  language?: string;
-  diarize: boolean;  // ignoré si !supportsDiarization
+  language?: string | null;
+  diarize: boolean;   // ignoré si !supportsDiarization
 }
 
 interface TranscriptionResult {
   text: string;
-  segments?: Segment[];  // présents si diarize et supporté
+  segments?: Segment[];   // présents dès que supportsSegments
 }
 
-interface Segment { text: string; start: number; end: number; speaker_id?: string }
+interface Segment { text: string; start: number; end: number; speakerId?: string }
 ```
 
-### 5.2 Différences diarization
+`supportsSegments` est distinct de `supportsDiarization` : c'est le premier qui conditionne la
+qualité du merge, le second qui conditionne le format de sortie.
 
-- **MistralProvider** : `supportsDiarization = true`. Si `diarize: true`, appelle Voxtral avec `diarize=true, timestamp_granularities=["segment"]` → renvoie `segments[].speaker_id`. Si `diarize: false`, transcript plat.
-- **OpenAIProvider** : `supportsDiarization = false`. `diarize` ignoré, transcript plat. Documenté dans l'UI (toggle désactivé quand OpenAI sélectionné).
-- **CustomProvider** : `supportsDiarization` configurable (par défaut `false`).
-- **MockProvider** : déterministe, renvoie des segments en cache pour les tests.
+### 5.2 Segments toujours demandés
+
+Le merge sans doublons repose sur les timestamps, pas sur la diarization. Les providers demandent donc
+**systématiquement** des segments :
+
+- **Mistral** : `timestamp_granularities: ["segment"]`, plus `diarize: true` si l'option est active.
+  `supportsSegments = true`, `supportsDiarization = true`.
+- **OpenAI** : `response_format: "verbose_json"`, `timestamp_granularities: ["segment"]`.
+  `supportsSegments = true`, `supportsDiarization = false` → segments sans `speakerId`.
+- **Custom** : les deux flags sont configurables (défaut `false`/`false`).
+- **Mock** : déterministe, segments en dur, les deux flags à `true`.
+
+Si `supportsSegments` est faux, le pipeline retombe sur `mergeTexts` et le markdown exporté porte un
+avertissement sur les doublons possibles aux frontières de chunks (F-TR-07).
 
 ### 5.3 Modèles & endpoint
 
-- Dropdown presets : `voxtral-mini-latest` (Mistral), `whisper-1` + `gpt-4o-transcribe` (OpenAI).
-- Champs custom : `endpoint` + `model` (provider Custom, ou pour surcharger un preset).
-- Clé API par provider, `chrome.storage.local`, jamais loggée.
+- Presets (renvoient des segments) : `voxtral-mini-latest` (Mistral), `whisper-1` (OpenAI).
+- `gpt-4o-transcribe` ne supporte pas `verbose_json` : non proposé en preset, accessible via le champ
+  custom avec l'avertissement F-TR-07.
+- Champs custom : `endpoint` + `model`.
+- Clé API par provider, `chrome.storage.local`, jamais loggée, jamais en `storage.sync`.
+
+### 5.4 Erreurs & retry
+
+`providers/retry.ts` (pur) : backoff exponentiel avec jitter sur 429 / 5xx / timeout réseau, plafond
+de tentatives, abandon immédiat sur 401/403 (clé invalide). Un chunk en échec définitif n'annule pas
+les autres : il est marqué dans le résultat et signalé dans le markdown.
 
 ## 6. Export Markdown
 
@@ -218,6 +313,8 @@ extension_version: 0.1.0
 ```
 
 Sans diarization : un seul blockquote avec le texte continu (timestamps optionnels off en MVP).
+Avec diarization et plus d'un chunk, une note signale que les identités de speakers ne sont pas
+appariées entre chunks (PRD §6).
 
 ## 7. Config (`chrome.storage.local`)
 
@@ -226,9 +323,11 @@ interface Config {
   provider: 'mistral' | 'openai' | 'custom';
   model: string;
   customEndpoint?: string;
+  customSupportsSegments?: boolean;
+  customSupportsDiarization?: boolean;
   apiKeys: { mistral?: string; openai?: string; custom?: string };
   diarize: boolean;
-  downloadAudio: boolean;   // défaut false
+  downloadAudio: boolean;    // défaut false
   language: string | null;   // null = auto
 }
 ```
@@ -241,75 +340,70 @@ interface Config {
   "name": "OpenMeetRec",
   "version": "0.1.0",
   "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["https://api.mistral.ai/*", "https://api.openai.com/*"],
+  "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background/service-worker.js", "type": "module" },
-  "action": { "default_title": "OpenMeetRec" },
-  "options_page": "ui/options.html",
-  "web_accessible_resources": [
-    { "resources": ["offscreen/offscreen.html", "ui/record.html"], "matches": ["<all_urls>"] }
-  ]
-  // pas de content_scripts en MVP
+  "action": { "default_popup": "ui/popup.html", "default_title": "OpenMeetRec" },
+  "options_page": "ui/options.html"
 }
 ```
 
-Clic sur l'action → ouvre `ui/record.html` dans un onglet (via `chrome.tabs.create`).
+Notes :
+
+- Pas de `content_scripts` en MVP.
+- Pas de `web_accessible_resources` : aucune page web tierce n'a besoin de référencer nos ressources.
+- `host_permissions` limité aux deux API supportées. `<all_urls>` est **optionnel** et demandé à la
+  volée uniquement si l'utilisateur configure un endpoint custom — il n'est jamais accordé par défaut.
+- `activeTab` suffit pour `tabCapture` sur l'onglet où le popup est ouvert : pas besoin de permission
+  d'hôte sur les sites de visio.
 
 ## 9. Permissions audit
 
-Document `docs/permissions-audit.md` justifie chaque permission :
-- `tabCapture` : audio de l'onglet visio courant.
-- `offscreen` : tenir le recorder hors du service worker.
-- `storage` : config + clés API (locales).
-- `downloads` : export markdown + audio.
-- `activeTab` : onglet courant pour le record.
-- `host_permissions <all_urls>` : capture sur n'importe quelle plateforme de visio ; requête API au provider choisi.
-
-Aucune télémétrie. CSP restrictive.
+Document `docs/permissions-audit.md`, une entrée par permission avec sa justification, son périmètre
+et ce qu'elle ne permet pas. Aucune télémétrie. CSP restrictive.
 
 ## 10. Auto-contrôle (tests)
-
-> Réponse à : « Playwright aide-t-il pour une extension ? »
-
-**Oui, de façon ciblée**, combiné à des tests unitaires qui font l'essentiel.
 
 ### 10.1 Niveau 1 — Unitaires (Vitest, sans navigateur)
 
 Le plus rentable, car la logique fragile est **pure** :
-- `audio/chunking.ts` : split + overlap, bornes, cas < seuil, cas exactement au seuil (ports des cas de `chunking.py`).
-- `audio/merge.ts` : `merge_segments` crossfade, `merge_texts` concat, offset, 1 chunk / N chunks.
-- `config/config.ts` : résolution provider/modèle, defaults.
+
+- `audio/chunking.ts` : `planChunks` — bornes, durée < seuil, durée exactement au seuil, écart du
+  dernier chunk contenu dans l'overlap.
+- `audio/merge.ts` : `mergeSegments` (coupe à mi-overlap, offsets, 1 chunk / N chunks),
+  `mergeTexts`, `adjustTimestamps`.
+- `config/config.ts` : defaults, validation, résolution provider/modèle.
+- `providers/registry.ts` : presets, capacités par provider.
+- `providers/retry.ts` : backoff, abandon sur 401, plafond de tentatives.
+- `pipeline/concurrency.ts` : `mapLimit` — ordre préservé, concurrence respectée, propagation d'erreur.
 - `capture/detect.ts` : feature detection sur mocks de `chrome`.
-- `providers/mock.ts` : déterministe.
-- `shared/format.ts` : génération frontmatter + blockquote (avec/sans diarization).
+- `shared/format.ts` : frontmatter + blockquote, avec/sans diarization, avertissements.
 
-**Règle d'architecture : ces modules n'importent jamais `chrome`/`browser`** → testables en ms.
+### 10.2 Niveau 2 — Audio réel (Playwright, contexte navigateur)
 
-### 10.2 Niveau 2 — Pipeline audio (Vitest + Web Audio polyfill, ou Playwright)
-
-- Fixture `tests/fixtures/audio/30s.webm`.
-- Décodage + chunking + re-encode réels.
-- Assert : N chunks, durée cumulée == source + overlap, opus lisible.
-- Fallback : exécuter dans Playwright (vrai Web Audio) si la polyfill Node est limitée.
+- Fixture `tests/fixtures/audio/*.webm`.
+- `ChunkScheduler` sur un flux synthétique accéléré : assert que les chunks produits correspondent à
+  `planChunks`, que chaque chunk est décodable, et que l'overlap est bien présent.
 
 ### 10.3 Niveau 3 — Intégration (Playwright headful, extension unpacked)
 
-Playwright charge une extension unpacked (Chromium headful sous xvfb, flags `--load-extension`) :
+Chromium headful sous xvfb, `--load-extension` :
 
-- `e2e/record.spec.ts` : ouvre `record.html`, Start, joue `meeting-page.html` (un `<audio>` opus), Stop, assert un `.md` téléchargé avec frontmatter + blockquote.
-- `e2e/capture-tabcapture.spec.ts` : `tabCapture` sans picker → automatisable, assert `.webm` non vide.
-- `e2e/providers.spec.ts` : provider **mock** → transcript déterministe, exports txt/json présents.
-- `e2e/options.spec.ts` : config persistée, bouton « tester la clé » mocké, clé pas loggée.
+- `record.spec.ts` : popup → Start sur `meeting-page.html` → Stop → assert `.md` téléchargé avec
+  frontmatter + blockquote.
+- `capture-tabcapture.spec.ts` : `tabCapture` sans picker, assert `.webm` non vide **et** son de
+  l'onglet toujours audible (ré-injection présente dans le graphe audio).
+- `providers.spec.ts` : provider **mock** → transcript déterministe.
+- `options.spec.ts` : config persistée, « tester la clé » mocké, clé jamais loggée.
 
 **Provider mock obligatoire** : pas de réseau, pas de clé API en CI.
 
 ### 10.4 Page fixture WebRTC (`tests/fixtures/meeting-page.html`)
 
-Page factice qui :
-- crée un `AudioContext` + `OscillatorNode` (sine 440 Hz) → `MediaStreamDestination` ;
-- monte un `RTCPeerConnection` loopback transportant la piste ;
-- override `getUserMedia` pour renvoyer la sine-wave.
-
-Permet de tester la capture **sans vraie visio, sans micro, sans réseau**, déterministe. Réutilisable pour le path Firefox plus tard.
+Page factice qui crée un `AudioContext` + `OscillatorNode` (sine 440 Hz) → `MediaStreamDestination`,
+monte un `RTCPeerConnection` loopback transportant la piste, et override `getUserMedia` pour renvoyer
+la sine-wave. Capture testable **sans vraie visio, sans micro, sans réseau**, de façon déterministe.
+Réutilisable pour le path Firefox plus tard.
 
 ### 10.5 Ce que Playwright ne couvre pas
 
@@ -318,16 +412,20 @@ Permet de tester la capture **sans vraie visio, sans micro, sans réseau**, dét
 | `getDisplayMedia` (picker système) | Non utilisé en MVP (`tabCapture` à la place) |
 | Extension Firefox | Non supporté par Playwright → `firefox-mcp` exploratoire, post-MVP |
 | Vrai micro matériel | Override `getUserMedia` en MAIN world de test (sine-wave) |
+| Transcription réelle (Mistral/OpenAI) | Validation manuelle hors CI, clés jamais commitées |
 
 ### 10.6 CI
 
 - `npm test` : Vitest (unitaires) → rapide.
-- `npm run test:e2e` : Playwright headful sous xvfb (déjà dispo via le skill playwright-cli).
+- `npm run test:e2e` : Playwright headful sous xvfb.
 
 ### 10.7 Synthèse
 
-- **L'essentiel de la robustesse vient des tests unitaires sur la logique pure** (chunking/merge/config/format/providers) — c'est là qu'on investit en premier, fully automatisable.
-- **Playwright complète** pour la plomberie extension (popup/options/downloads/tabCapture) avec une page fixture WebRTC.
-- **Firefox** sera couvert plus tard via `firefox-mcp` (exploratoire) puis geckodriver si on automatise.
+L'essentiel de la robustesse vient des tests unitaires sur la logique pure (chunking/merge/config/
+format/retry/concurrency) — c'est là qu'on investit en premier, entièrement automatisable. Playwright
+complète pour la plomberie extension (popup/options/downloads/tabCapture) avec une page fixture
+WebRTC. Firefox sera couvert plus tard via `firefox-mcp` puis geckodriver.
 
-L'architecture est donc **motivée par la testabilité** : capture abstraite, provider mock, logique pure isolée, page fixture. Ce sont des décisions de conception, pas une rustine.
+L'architecture est donc **motivée par la testabilité** : capture abstraite, provider mock, logique
+pure isolée, planification de chunks séparée de leur production. Ce sont des décisions de conception,
+pas une rustine.
