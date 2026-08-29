@@ -1,11 +1,11 @@
 # OpenMeetRec — AGENTS rules
 
-Extension de navigateur OSS, cross-browser (Chromium + Firefox), recording audio de visio + pipeline LLM.
+Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, point d'extension prévu en architecture). Recording audio de visio + transcription.
 
 ## Conventions
 
 - TypeScript strict, ESM, Vite pour le build.
-- Une seule base de code, deux builds (`--target=chrome|firefox`). Pas de branches runtime spécifiques quand c'est évitable.
+- Build Chromium MV3. Le point d'extension Firefox (`webrtcStrategy.ts`) est une coquille vide en MVP.
 - **Logique pure isolée du navigateur** : tout ce qui est chunking/merge/config/providers doit être testable sans DOM (Vitest). Ne pas importer `chrome`/`browser` dans ces modules.
 - **Stratégie de capture abstraite** derrière une interface ; jamais appeler `chrome.tabCapture` directement hors `capture/`.
 - **Provider mock obligatoire** pour tout test d'intégration : pas de réseau, pas de clé API dans la CI.
