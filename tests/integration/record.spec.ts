@@ -126,6 +126,74 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   }
 });
 
+test('reprend la transcription après un échec API, sans perdre les chunks (retry)', async () => {
+  // `api.calls` est partagé sur tout le fichier (un seul serveur pour tous les
+  // tests) : chaque assertion se limite aux appels émis depuis cette borne.
+  const callsBeforeSession = api.calls.length;
+  api.setFailing(500);
+
+  const meeting = await ext.context.newPage();
+  await meeting.goto(`${api.url}/meeting`);
+  await expect(meeting.locator('#state')).toHaveText('flux distant reçu');
+
+  const tabId = await ext.worker.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab?.id ?? -1;
+  });
+  expect(tabId).toBeGreaterThan(0);
+
+  await configure(ext.worker, `${api.url}/v1/audio/transcriptions`);
+
+  const popup = await ext.context.newPage();
+  await popup.goto(extensionUrl(ext.id, 'ui/popup.html'));
+
+  const started = await send(popup, {
+    target: 'sw',
+    type: 'START_RECORDING',
+    tabId,
+    url: `${api.url}/meeting`,
+    micEnabled: true,
+  });
+  expect(started).toEqual({ ok: true });
+
+  await popup.waitForTimeout(RECORDING_MS);
+  await send(popup, { target: 'sw', type: 'STOP_RECORDING' });
+
+  // 500 est réessayable (retry.ts) : chaque chunk épuise ses tentatives avant
+  // que le pipeline ne rende la main — d'où l'API qui répond en échec, mais
+  // pas de statut `error` (F-pipeline : un chunk raté ne casse pas la session).
+  const failed = await waitForDone(popup);
+  expect(failed.status).toBe('done');
+  expect(failed.error?.message).toContain(`${EXPECTED_CHUNKS} chunk`);
+  const failedCalls = api.calls.slice(callsBeforeSession);
+  expect(failedCalls.length).toBeGreaterThan(0);
+  expect(failedCalls.every((call) => call.status === 500)).toBe(true);
+
+  const callsBeforeRetry = api.calls.length;
+  api.setFailing(null);
+
+  const retried = await send(popup, { target: 'sw', type: 'RETRY_PIPELINE' });
+  expect(retried).toEqual({ ok: true });
+
+  const recovered = await waitForDone(popup);
+  expect(recovered.status).toBe('done');
+  expect(recovered.error).toBeNull();
+  expect(recovered.chunkCount).toBe(EXPECTED_CHUNKS);
+
+  // Le retry relance toute la session (pas de résultats partiels persistés) :
+  // les EXPECTED_CHUNKS chunks repartent, cette fois avec succès.
+  const retryCalls = api.calls.slice(callsBeforeRetry);
+  expect(retryCalls).toHaveLength(EXPECTED_CHUNKS);
+  expect(retryCalls.every((call) => call.status === 200)).toBe(true);
+
+  const markdown = await readLatestDownload(ext.worker);
+  expect(markdown).not.toContain('not transcribed');
+  expect(markdown).toContain('segment 0');
+
+  await meeting.close();
+  await popup.close();
+});
+
 async function configure(worker: Worker, endpoint: string): Promise<void> {
   await worker.evaluate(async (url) => {
     await chrome.storage.local.set({
@@ -164,4 +232,12 @@ async function readDownload(worker: Worker): Promise<string> {
   const done = files.filter((f) => f.state === 'complete' && f.filename);
   expect(done).toHaveLength(1);
   return readFile(done[0]!.filename, 'utf8');
+}
+
+/** Le plus récent téléchargement complet — pour les tests qui en déclenchent plusieurs. */
+async function readLatestDownload(worker: Worker): Promise<string> {
+  const files = await worker.evaluate(() => chrome.downloads.search({}));
+  const done = files.filter((f) => f.state === 'complete' && f.filename).sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
+  expect(done.length).toBeGreaterThan(0);
+  return readFile(done[0]!.filename!, 'utf8');
 }

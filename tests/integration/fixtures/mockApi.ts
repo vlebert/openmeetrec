@@ -22,16 +22,21 @@ export interface RecordedCall {
   /** Noms des champs du multipart, dans l'ordre. */
   fields: string[];
   authorization: string | undefined;
+  /** Statut HTTP effectivement renvoyé — utile pour distinguer tentatives ratées et réussies. */
+  status: number;
 }
 
 export interface MockApi {
   url: string;
   calls: RecordedCall[];
+  /** Fait échouer toutes les prochaines transcriptions avec ce statut, jusqu'à `setFailing(null)`. */
+  setFailing(status: number | null): void;
   close(): Promise<void>;
 }
 
 export async function startMockApi(meetingPagePath: string): Promise<MockApi> {
   const calls: RecordedCall[] = [];
+  let failStatus: number | null = null;
 
   const server: Server = createServer((req, res) => {
     const parts: Buffer[] = [];
@@ -54,13 +59,21 @@ export async function startMockApi(meetingPagePath: string): Promise<MockApi> {
 
       const body = Buffer.concat(parts);
       const raw = body.toString('latin1');
+      const status = failStatus ?? 200;
       calls.push({
         order: calls.length,
         path: url,
         bytes: body.length,
         fields: [...raw.matchAll(/name="([^"]+)"/g)].map((m) => m[1] ?? ''),
         authorization: req.headers['authorization'],
+        status,
       });
+
+      if (failStatus !== null) {
+        res.writeHead(failStatus, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'mock failure' }));
+        return;
+      }
 
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(transcriptionFor(body.length)));
@@ -74,6 +87,9 @@ export async function startMockApi(meetingPagePath: string): Promise<MockApi> {
   return {
     url: `http://localhost:${port}`,
     calls,
+    setFailing: (status) => {
+      failStatus = status;
+    },
     close: () =>
       new Promise<void>((resolve) => {
         server.close(() => resolve());

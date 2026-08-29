@@ -81,6 +81,8 @@ async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
       return startRecording(message);
     case 'STOP_RECORDING':
       return stopRecording();
+    case 'RETRY_PIPELINE':
+      return retryPipeline();
     case 'RESET':
       await writeState(IDLE_STATE);
       return { ok: true };
@@ -174,6 +176,24 @@ async function stopRecording(): Promise<Ack> {
 }
 
 /**
+ * Reprend une session en échec (F-CAP-08 côté résilience) : les chunks sont
+ * déjà en OPFS, il suffit de relancer le pipeline sur le même `sessionId`.
+ * Relance *tous* les chunks de la session, pas seulement ceux en échec — le
+ * pipeline ne garde pas de résultats partiels d'un appel à l'autre.
+ */
+async function retryPipeline(): Promise<Ack> {
+  const state = await readState();
+  const retryable = state.status === 'error' || (state.status === 'done' && state.error !== null);
+  if (!retryable || state.sessionId === null) {
+    return { ok: false, error: { code: 'internal', message: 'nothing to retry' } };
+  }
+  await writeState({ ...state, status: 'processing', error: null, progress: null });
+  await ensureOffscreen();
+  await transcribeAndExport();
+  return { ok: true };
+}
+
+/**
  * Enchaîne transcription (dans l'offscreen) et téléchargements (ici : seul le
  * service worker a accès à `chrome.downloads`). L'offscreen n'est fermé qu'une
  * fois les téléchargements terminés — le fermer plus tôt révoquerait les blobs
@@ -245,14 +265,25 @@ async function transcribeAndExport(): Promise<void> {
 async function downloadAndWait(request: DownloadRequest): Promise<string> {
   const id = await chrome.downloads.download({ url: request.url, filename: request.filename, saveAs: false });
   await new Promise<void>((resolve) => {
-    const listener = (delta: chrome.downloads.DownloadDelta): void => {
-      if (delta.id !== id || !delta.state) return;
-      const done = delta.state.current === 'complete' || delta.state.current === 'interrupted';
-      if (!done) return;
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
       chrome.downloads.onChanged.removeListener(listener);
       resolve();
     };
+    const listener = (delta: chrome.downloads.DownloadDelta): void => {
+      if (delta.id !== id || !delta.state) return;
+      const done = delta.state.current === 'complete' || delta.state.current === 'interrupted';
+      if (done) finish();
+    };
     chrome.downloads.onChanged.addListener(listener);
+    // Un téléchargement minuscule (ex. un markdown vide, chunks tous en échec)
+    // peut déjà être terminé avant que le listener ne soit posé : sans ce
+    // rattrapage, on attendrait indéfiniment un évènement déjà passé.
+    void chrome.downloads.search({ id }).then(([existing]) => {
+      if (existing && (existing.state === 'complete' || existing.state === 'interrupted')) finish();
+    });
   });
   return request.filename;
 }

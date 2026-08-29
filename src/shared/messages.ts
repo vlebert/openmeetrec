@@ -68,6 +68,7 @@ export interface AudioLevels {
 export type ToWorkerMessage =
   | { target: 'sw'; type: 'START_RECORDING'; tabId: number; url: string; micEnabled: boolean }
   | { target: 'sw'; type: 'STOP_RECORDING' }
+  | { target: 'sw'; type: 'RETRY_PIPELINE' }
   | { target: 'sw'; type: 'GET_STATE' }
   | { target: 'sw'; type: 'RESET' }
   | { target: 'sw'; type: 'CHUNK_READY'; index: number; start: number; end: number }
