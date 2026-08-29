@@ -97,17 +97,18 @@ Il découpe un vrai fichier audio (assez long pour produire plusieurs chunks) av
 chaque chunk au provider choisi, puis écrit le markdown obtenu dans `test-results/` (ignoré par git)
 pour relecture. Rien n'est commité, rien n'est loggé — la clé API ne sert qu'à l'en-tête HTTP.
 
-Config par variables d'environnement, à garder hors du dépôt (ex. un fichier source dans le home,
-jamais dans le projet) :
+Le fichier audio de test se pose dans `tests/manual/audio/` (ignoré par git, dans le dépôt pour la
+commodité du chemin). Les clés API, elles, restent hors du dépôt (ex. un fichier source dans le
+home) :
 
 ```bash
 # ~/.config/openmeetrec/test.env — jamais dans le dépôt
-export OMR_TEST_AUDIO=~/somewhere/long-recording.webm   # quelques minutes, plusieurs chunks
-export MISTRAL_API_KEY=...                               # ou OPENAI_API_KEY selon le provider
+export MISTRAL_API_KEY=...   # ou OPENAI_API_KEY selon le provider
 ```
 
 ```bash
 source ~/.config/openmeetrec/test.env
+export OMR_TEST_AUDIO=tests/manual/audio/long-recording.webm   # quelques minutes, plusieurs chunks
 OMR_TEST_PROVIDER=mistral npm run test:real-api
 OMR_TEST_PROVIDER=openai npm run test:real-api
 ```

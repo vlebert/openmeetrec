@@ -10,3 +10,5 @@ test-results/
 playwright-report/
 .playwright-cli/
 dist-test/
+tests/manual/audio/*
+!tests/manual/audio/.gitkeep
