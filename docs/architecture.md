@@ -153,7 +153,17 @@ s'obtient dans le service worker (seul contexte qui connaît le `tabId` et déti
 tenir un `MediaStream`). Le jeton fait le pont, et il traverse un message — d'où un `streamId`
 opaque plutôt qu'un objet.
 
-`webrtcStrategy.ts` est une **coquille vide** en MVP, qui throw « Firefox non supporté ». Elle matérialise le point d'extension sans l'implémenter. Quand on étendra à Firefox, on branchera l'interception WebRTC en MAIN world sans toucher au reste.
+`webrtcStrategy.ts` est une **coquille vide** en MVP, qui throw « Firefox non supporté ». Elle matérialise le point d'extension sans l'implémenter.
+
+**Note Firefox (2026-08, non prioritaire).** Firefox n'a pas d'équivalent de `tabCapture` et n'en aura
+pas à court terme : l'API d'extension est bloquée en P5 depuis 9 ans ([bug 1391223](https://bugzilla.mozilla.org/show_bug.cgi?id=1391223)),
+`getDisplayMedia({ audio })` ignore silencieusement l'audio d'onglet depuis 7 ans ([bug 1541425](https://bugzilla.mozilla.org/show_bug.cgi?id=1541425)),
+et le partage plein écran/fenêtre n'a pas d'audio système natif. Le seul chemin réaliste serait
+l'interception `RTCPeerConnection` en MAIN world (piste par participant, disponible depuis Firefox 128) —
+mais ça ne couvre pas les sites qui ne passent pas par WebRTC (ex. Zoom web, qui bascule parfois en
+WASM), demande un refactor du seam `CaptureStrategy` (chunks au lieu de `MediaStream`, le flux ne
+traverse pas la frontière page → extension), et une maintenance par site. Décision : on n'attaque pas
+Firefox tant que Chromium n'est pas mature ; `webrtcStrategy.ts` reste une coquille.
 
 ### 3.2 `tabCaptureStrategy` (MVP, Chromium)
 
