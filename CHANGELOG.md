@@ -1,10 +1,16 @@
 # Changelog
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versionnage
-[SemVer](https://semver.org/lang/fr/). Tant qu'aucune version n'est publiée, tout s'accumule
-dans « Non publié ».
+[SemVer](https://semver.org/lang/fr/). Les changements en cours s'accumulent dans « Non publié »
+jusqu'à la version suivante.
 
 ## [Non publié]
+
+## [0.2.0] - 2026-08-29
+
+Première version numérotée. Tout ce qui précède s'est accumulé sous « Non publié » depuis le
+scaffolding : la chaîne complète enregistrement → transcription → export tient debout dans
+Chromium, mais n'a encore jamais vu une vraie API ni une vraie visioconférence.
 
 ### Ajouté
 

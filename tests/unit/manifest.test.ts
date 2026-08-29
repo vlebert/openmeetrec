@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '@/manifest.json';
+import pkg from '../../package.json';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
@@ -63,7 +64,13 @@ describe('manifest', () => {
     expect(manifest.action.default_icon).not.toEqual(RECORDING_ICON);
   });
 
+  /**
+   * La version vit dans deux fichiers, et rien au build ne les rapproche : c'est
+   * le manifest qui devient la version installée, et `package.json` celle que
+   * lit le développeur. Un bump fait dans un seul des deux ne se voit pas.
+   */
   it('déclare une version alignée sur le package', () => {
     expect(manifest.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(manifest.version).toBe(pkg.version);
   });
 });
