@@ -37,7 +37,8 @@ Fait :
 
 - Page de session (`ui/record.html`) : suivi détaillé hors popup.
 - Conversion 16 kHz mono en repli si une API refuse le webm/opus brut.
-- Validation avec de vraies API (Mistral, OpenAI) et sur une vraie visio.
+- Outillage de validation manuelle contre une vraie API en place (`npm run test:real-api`), mais
+  jamais encore exécuté pour de vrai contre Mistral/OpenAI, ni sur une vraie visio.
 
 ## Limites connues
 
@@ -84,6 +85,36 @@ pointez dessus plutôt que de retélécharger :
 ```bash
 OMR_CHROMIUM=~/.cache/ms-playwright/chromium-1232/chrome-linux64/chrome DISPLAY=:1 npm run test:e2e
 ```
+
+### Valider avec une vraie API (manuel, hors CI)
+
+`npm test` et `npm run test:e2e` n'appellent jamais de vraie API (règle du projet : provider mock
+obligatoire en CI). Pour vérifier de temps en temps que le pipeline tient face à une vraie réponse
+Mistral/OpenAI — sans payer à chaque `git push` — il y a un troisième test, à part et manuel :
+`tests/manual/real-api.manual.ts`, lancé uniquement via `npm run test:real-api`.
+
+Il découpe un vrai fichier audio (assez long pour produire plusieurs chunks) avec `ffmpeg`, envoie
+chaque chunk au provider choisi, puis écrit le markdown obtenu dans `test-results/` (ignoré par git)
+pour relecture. Rien n'est commité, rien n'est loggé — la clé API ne sert qu'à l'en-tête HTTP.
+
+Config par variables d'environnement, à garder hors du dépôt (ex. un fichier source dans le home,
+jamais dans le projet) :
+
+```bash
+# ~/.config/openmeetrec/test.env — jamais dans le dépôt
+export OMR_TEST_AUDIO=~/somewhere/long-recording.webm   # quelques minutes, plusieurs chunks
+export MISTRAL_API_KEY=...                               # ou OPENAI_API_KEY selon le provider
+```
+
+```bash
+source ~/.config/openmeetrec/test.env
+OMR_TEST_PROVIDER=mistral npm run test:real-api
+OMR_TEST_PROVIDER=openai npm run test:real-api
+```
+
+Variables optionnelles : `OMR_TEST_MODEL`, `OMR_TEST_DIARIZE=1`, `OMR_TEST_CHUNK_DURATION` /
+`OMR_TEST_OVERLAP` (secondes — utile pour forcer plusieurs chunks sur un fichier plus court sans
+changer les valeurs par défaut du produit), `OMR_TEST_ENDPOINT` (provider `custom`).
 
 ## Choix structurants
 

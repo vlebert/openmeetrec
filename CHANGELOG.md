@@ -6,6 +6,12 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Ajouté
+
+- `npm run test:real-api` : validation manuelle du pipeline contre une vraie API (Mistral/OpenAI),
+  hors CI et hors `npm test` — découpe un fichier audio réel en chunks via `ffmpeg`, clé API et
+  fichier audio fournis par variables d'environnement, jamais commités.
+
 ## [0.2.0] - 2026-08-29
 
 Première version numérotée. Tout ce qui précède s'est accumulé sous « Non publié » depuis le

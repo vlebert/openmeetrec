@@ -28,6 +28,9 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
   car la révision attendue par Playwright (1234) n'est pas installée et on ne retélécharge pas de
   navigateur pour deux révisions d'écart.
 - Firefox exploratoire : `firefox-mcp` (Firefox réel VNC) — voir `docs/testing-firefox.md` (à créer).
+- Validation manuelle contre une vraie API (Mistral/OpenAI) : `npm run test:real-api` —
+  `tests/manual/real-api.manual.ts`, jamais lancé par `npm test` ni par la CI (voir README). Clé API
+  et fichier audio viennent de variables d'environnement, jamais du dépôt.
 - Ne pas ajouter de dépendance sans justification.
 
 ## Références
