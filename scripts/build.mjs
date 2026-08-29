@@ -6,12 +6,24 @@
  * telle quelle des .html, des .css et du manifest.
  */
 
-import { build } from 'vite';
 import { access, cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+
+// Vite est importé dynamiquement, et pas en tête de fichier : un `import`
+// statique est résolu avant que la moindre ligne ne s'exécute, donc sur un dépôt
+// fraîchement cloné le script mourait sur une trace ERR_MODULE_NOT_FOUND qui
+// désigne ce fichier au lieu de l'installation manquante.
+try {
+  await access(join(root, 'node_modules', 'vite'));
+} catch {
+  console.error('Dépendances absentes : lance `npm ci` avant `npm run build`.');
+  console.error("(`node_modules/` n'est pas versionné ; le package-lock.json, si.)");
+  process.exit(1);
+}
+const { build } = await import('vite');
 const srcDir = join(root, 'src');
 const isTestBuild = process.env.OMR_TEST_BUILD === '1';
 const outDir = join(root, isTestBuild ? 'dist-test' : 'dist');
