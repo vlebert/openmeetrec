@@ -12,6 +12,9 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
 - Pas de télémétrie. Aucun envoi réseau non déclenché explicitement par l'utilisateur.
 - Chaque permission justifiée dans `docs/permissions-audit.md`.
 - Commits : messages courts en français ou anglais, au choix.
+- Changelog tenu à jour dans `CHANGELOG.md` (format Keep a Changelog) : ajouter une entrée pour
+  chaque changement notable pour l'utilisateur ou l'intégrateur (fonctionnalité, correctif,
+  changement de comportement) — pas pour du refactor interne sans effet visible.
 
 ## Testing
 
