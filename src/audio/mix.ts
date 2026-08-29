@@ -70,5 +70,17 @@ function rms(meter: Meter): number {
     const centered = (sample - 128) / 128;
     sum += centered * centered;
   }
-  return Math.min(1, Math.sqrt(sum / meter.buffer.length));
+  return amplitudeToLevel(Math.sqrt(sum / meter.buffer.length));
+}
+
+// L'oreille perçoit le volume de façon logarithmique : une parole normale a une
+// amplitude RMS linéaire faible (souvent 0.05–0.15), donc une barre proportionnelle
+// à l'amplitude brute semble presque immobile. On remappe une plage en dB
+// (silence à -50dB, plein niveau à 0dB) sur 0..1 pour un rendu perceptuellement fidèle.
+const SILENCE_DB = -50;
+
+function amplitudeToLevel(amplitude: number): number {
+  if (amplitude <= 0) return 0;
+  const db = 20 * Math.log10(amplitude);
+  return Math.max(0, Math.min(1, (db - SILENCE_DB) / -SILENCE_DB));
 }
