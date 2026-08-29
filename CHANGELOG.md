@@ -12,6 +12,13 @@ jusqu'à la version suivante.
   hors CI et hors `npm test` — découpe un fichier audio réel en chunks via `ffmpeg`, clé API et
   fichier audio fournis par variables d'environnement, jamais commités.
 
+### Modifié
+
+- Transcription diarizée : les segments consécutifs d'un même speaker sont désormais regroupés en
+  un seul paragraphe (un tour de parole), au lieu d'un paragraphe par segment brut renvoyé par
+  l'API (~10s). Le regroupement s'arrête à chaque frontière de chunk, car les identifiants de
+  speaker ne sont pas appariés d'un chunk à l'autre.
+
 ## [0.2.0] - 2026-08-29
 
 Première version numérotée. Tout ce qui précède s'est accumulé sous « Non publié » depuis le

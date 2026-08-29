@@ -3,6 +3,7 @@ import {
   adjustTimestamps,
   chunkBoundaries,
   countSpeakers,
+  groupSegmentsBySpeaker,
   mergeSegments,
   mergeTexts,
   segmentsToText,
@@ -126,6 +127,57 @@ describe('segmentsToText / countSpeakers', () => {
   it('compte les speakers distincts', () => {
     expect(countSpeakers([seg('a', 0, 1, '0'), seg('b', 1, 2, '1'), seg('c', 2, 3, '0')])).toBe(2);
     expect(countSpeakers([seg('a', 0, 1)])).toBe(0);
+  });
+});
+
+describe('groupSegmentsBySpeaker', () => {
+  it('fusionne les segments consécutifs du même speaker en un tour de parole', () => {
+    const turns = groupSegmentsBySpeaker([
+      seg('Bonjour,', 0, 2, '0'),
+      seg('comment ça va ?', 2, 4, '0'),
+      seg('Bien merci.', 4, 6, '1'),
+    ]);
+
+    expect(turns).toEqual([
+      { speakerId: '0', start: 0, end: 4, text: 'Bonjour, comment ça va ?' },
+      { speakerId: '1', start: 4, end: 6, text: 'Bien merci.' },
+    ]);
+  });
+
+  it('ne fusionne pas deux segments du même speaker à travers une frontière de chunk', () => {
+    // Speaker '0' de part et d'autre de la frontière à 100s : identifiants non
+    // appariés entre chunks, donc pas la même personne malgré l'ID identique.
+    const turns = groupSegmentsBySpeaker(
+      [seg('Avant.', 0, 5, '0'), seg('Après.', 120, 125, '0')],
+      [100],
+    );
+
+    expect(turns).toEqual([
+      { speakerId: '0', start: 0, end: 5, text: 'Avant.' },
+      { speakerId: '0', start: 120, end: 125, text: 'Après.' },
+    ]);
+  });
+
+  it('recommence un tour si un speaker revient après un autre', () => {
+    const turns = groupSegmentsBySpeaker([
+      seg('a', 0, 1, '0'),
+      seg('b', 1, 2, '1'),
+      seg('c', 2, 3, '0'),
+    ]);
+    expect(turns.map((t) => t.speakerId)).toEqual(['0', '1', '0']);
+  });
+
+  it('ignore les textes vides sans casser la fusion', () => {
+    const turns = groupSegmentsBySpeaker([
+      seg('a', 0, 1, '0'),
+      seg('', 1, 2, '0'),
+      seg('b', 2, 3, '0'),
+    ]);
+    expect(turns).toEqual([{ speakerId: '0', start: 0, end: 3, text: 'a b' }]);
+  });
+
+  it('renvoie une liste vide sans segment', () => {
+    expect(groupSegmentsBySpeaker([])).toEqual([]);
   });
 });
 
