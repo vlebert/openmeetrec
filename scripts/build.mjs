@@ -7,7 +7,7 @@
  */
 
 import { build } from 'vite';
-import { cp, mkdir, readdir } from 'node:fs/promises';
+import { access, cp, mkdir, readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,6 +32,29 @@ for (const file of statics) {
   const target = join(outDir, relative(srcDir, file));
   await mkdir(dirname(target), { recursive: true });
   await cp(file, target);
+}
+
+// Le manifest référence des chemins en dur : une entrée renommée dans
+// vite.config.ts ne casserait rien au build, seulement au chargement de
+// l'extension. On vérifie donc que tout ce qu'il pointe existe vraiment.
+const manifest = JSON.parse(await readFile(join(srcDir, 'manifest.json'), 'utf8'));
+const referenced = [
+  manifest.background?.service_worker,
+  manifest.action?.default_popup,
+  manifest.options_page,
+].filter(Boolean);
+
+const missing = [];
+for (const path of referenced) {
+  try {
+    await access(join(outDir, path));
+  } catch {
+    missing.push(path);
+  }
+}
+if (missing.length > 0) {
+  console.error(`Fichiers référencés par le manifest et absents de dist/ : ${missing.join(', ')}`);
+  process.exit(1);
 }
 
 console.log(`Extension construite dans ${relative(root, outDir)}/ (${statics.length} fichiers statiques copiés)`);
