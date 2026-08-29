@@ -1,7 +1,7 @@
 {
   "name": "openmeetrec",
   "version": "0.1.0",
-  "description": "Extension de navigateur open source pour enregistrer et transcrire l'audio des visioconférences web",
+  "description": "Extension de navigateur open source pour enregistrer et transcrire l'audio des visioconf\u00e9rences web",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -9,9 +9,12 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:test": "OMR_TEST_BUILD=1 node scripts/build.mjs",
+    "test:e2e": "npm run build:test && DISPLAY=${DISPLAY:-:1} playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/chrome": "^0.2.7",
     "@types/node": "^26.4.0",
     "typescript": "^7.0.2",

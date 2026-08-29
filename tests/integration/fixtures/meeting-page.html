@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Visio factice</title>
+  </head>
+  <body>
+    <h1>Visio factice</h1>
+    <p id="state">initialisation</p>
+    <script>
+      // Le son distant d'une vraie visio arrive par un flux WebRTC, pas par un
+      // <audio> : la page reproduit ce chemin avec une boucle locale entre deux
+      // RTCPeerConnection, pour que ce que capture l'extension ait la même forme.
+      const ctx = new AudioContext();
+      const carrier = ctx.createOscillator();
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      const gain = ctx.createGain();
+
+      carrier.frequency.value = 180;
+      lfo.frequency.value = 3;
+      lfoGain.gain.value = 60;
+      gain.gain.value = 0.25;
+
+      lfo.connect(lfoGain).connect(carrier.frequency);
+      carrier.connect(gain).connect(ctx.destination);
+      carrier.start();
+      lfo.start();
+
+      const dest = ctx.createMediaStreamDestination();
+      gain.connect(dest);
+
+      const local = new RTCPeerConnection();
+      const remote = new RTCPeerConnection();
+      local.onicecandidate = (e) => e.candidate && remote.addIceCandidate(e.candidate);
+      remote.onicecandidate = (e) => e.candidate && local.addIceCandidate(e.candidate);
+      remote.ontrack = (e) => {
+        const audio = new Audio();
+        audio.srcObject = e.streams[0];
+        audio.play().catch(() => {});
+        document.getElementById('state').textContent = 'flux distant reçu';
+      };
+      for (const track of dest.stream.getTracks()) local.addTrack(track, dest.stream);
+
+      (async () => {
+        const offer = await local.createOffer();
+        await local.setLocalDescription(offer);
+        await remote.setRemoteDescription(offer);
+        const answer = await remote.createAnswer();
+        await remote.setLocalDescription(answer);
+        await local.setRemoteDescription(answer);
+      })();
+    </script>
+  </body>
+</html>

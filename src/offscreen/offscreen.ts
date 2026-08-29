@@ -8,6 +8,7 @@
  */
 
 import { planChunks } from '@/audio/chunking';
+import { RUNTIME_CHUNK_OPTIONS } from '@/audio/chunkOptions';
 import { ChunkScheduler, type RecorderLike } from '@/audio/chunkScheduler';
 import { createMixer, type Mixer } from '@/audio/mix';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
@@ -85,7 +86,9 @@ async function runPipeline(sessionId: string, meta: SessionMeta, config: Config)
     // Les bornes des chunks se recalculent : le scheduler suit exactement le
     // même plan (`planChunks`), on n'a donc pas à les persister.
     const present = new Set(await opfs.listChunks(sessionId));
-    const chunks = planChunks(meta.duration).filter((chunk) => present.has(chunk.index));
+    const chunks = planChunks(meta.duration, RUNTIME_CHUNK_OPTIONS).filter((chunk) =>
+      present.has(chunk.index),
+    );
 
     const outcome = await runTranscription({
       chunks,
@@ -157,6 +160,7 @@ async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_
     micStream,
     mixer,
     scheduler: new ChunkScheduler({
+      opts: RUNTIME_CHUNK_OPTIONS,
       createRecorder: () => new MediaRecorder(mixer.stream, { mimeType }) as unknown as RecorderLike,
       mimeType,
       onChunk: (chunk, blob) => {

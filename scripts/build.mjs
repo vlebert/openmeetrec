@@ -7,13 +7,14 @@
  */
 
 import { build } from 'vite';
-import { access, cp, mkdir, readdir, readFile } from 'node:fs/promises';
+import { access, cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const srcDir = join(root, 'src');
-const outDir = join(root, 'dist');
+const isTestBuild = process.env.OMR_TEST_BUILD === '1';
+const outDir = join(root, isTestBuild ? 'dist-test' : 'dist');
 
 /** Liste récursive des fichiers correspondant à un suffixe. */
 async function collect(dir, suffix, found = []) {
@@ -34,10 +35,20 @@ for (const file of statics) {
   await cp(file, target);
 }
 
+// Le build d'intégration parle à un faux endpoint local. Les match patterns
+// Chrome n'acceptent pas de port, d'où `http://localhost/*` et non `:PORT`.
+if (isTestBuild) {
+  const path = join(outDir, 'manifest.json');
+  const manifest = JSON.parse(await readFile(path, 'utf8'));
+  manifest.name = 'OpenMeetRec (test)';
+  manifest.host_permissions = [...manifest.host_permissions, 'http://localhost/*'];
+  await writeFile(path, JSON.stringify(manifest, null, 2) + '\n');
+}
+
 // Le manifest référence des chemins en dur : une entrée renommée dans
 // vite.config.ts ne casserait rien au build, seulement au chargement de
 // l'extension. On vérifie donc que tout ce qu'il pointe existe vraiment.
-const manifest = JSON.parse(await readFile(join(srcDir, 'manifest.json'), 'utf8'));
+const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'));
 const referenced = [
   manifest.background?.service_worker,
   manifest.action?.default_popup,

@@ -16,7 +16,11 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
 ## Testing
 
 - Unitaires : Vitest sur `tests/unit/`.
-- Intégration : Playwright headful sur le display VNC existant (`DISPLAY=:1`) charge l'extension unpacked + page fixture WebRTC dans `tests/fixtures/meeting-page.html`.
+- Intégration : `npm run test:e2e` — Playwright headful sur le display VNC existant (`DISPLAY=:1`)
+  charge `dist-test/` (build de test) + la page fixture WebRTC `tests/integration/fixtures/meeting-page.html`.
+  Le build de test substitue deux modules (stratégie de capture, durées de chunk) ; le code de
+  production n'embarque rien de spécifique aux tests. `activeTab` étant impossible à obtenir par
+  automatisation, le vrai `chrome.tabCapture` reste vérifié à la main.
 - Firefox exploratoire : `firefox-mcp` (Firefox réel VNC) — voir `docs/testing-firefox.md` (à créer).
 - Ne pas ajouter de dépendance sans justification.
 
