@@ -109,3 +109,33 @@ describe('providers HTTP', () => {
     expect(fetchImpl.mock.calls[0]![0]).toBe('https://api.openai.com/v1/models');
   });
 });
+
+// Régression : sans `bind`, le `fetch` natif appelé comme méthode du provider
+// lève « Illegal invocation » dans le navigateur. Les autres tests injectent
+// tous un `fetchImpl`, donc aucun ne couvrait le chemin par défaut.
+describe('fetch par défaut', () => {
+  it('utilise le fetch global sans casser son contexte', async () => {
+    const original = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = function boundCheck(this: unknown, input: string | URL | Request) {
+      if (this !== globalThis && this !== undefined) throw new TypeError('Illegal invocation');
+      calls.push(String(input));
+      return Promise.resolve(
+        new Response(JSON.stringify(RESPONSE), { status: 200, headers: { 'content-type': 'application/json' } }),
+      );
+    } as unknown as typeof fetch;
+
+    try {
+      const provider = new MistralProvider({
+        endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+        apiKey: 'k',
+        supportsSegments: true,
+        supportsDiarization: true,
+      });
+      await expect(provider.transcribe(new Blob(['a']), OPTS)).resolves.toMatchObject({ text: 'ok' });
+      expect(calls).toEqual(['https://api.mistral.ai/v1/audio/transcriptions']);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});

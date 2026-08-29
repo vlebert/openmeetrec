@@ -11,7 +11,6 @@ import { planChunks } from '@/audio/chunking';
 import { ChunkScheduler, type RecorderLike } from '@/audio/chunkScheduler';
 import { createMixer, type Mixer } from '@/audio/mix';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
-import { loadConfig } from '@/config/storage';
 import { runTranscription } from '@/pipeline/pipeline';
 import { createProvider } from '@/providers/factory';
 import { resolveCapabilities } from '@/providers/registry';
@@ -26,7 +25,7 @@ import {
   type ToOffscreenMessage,
   type ToWorkerMessage,
 } from '@/shared/messages';
-import type { SessionMeta } from '@/shared/types';
+import type { Config, SessionMeta } from '@/shared/types';
 import { audioDownload, markdownDownload } from '@/storage/export';
 import * as opfs from '@/storage/opfs';
 
@@ -66,7 +65,7 @@ async function handle(message: ToOffscreenMessage): Promise<Ack | AudioLevels | 
     case 'GET_LEVELS':
       return session ? session.mixer.levels() : { tab: 0, mic: 0 };
     case 'RUN_PIPELINE':
-      return runPipeline(message.sessionId, message.meta);
+      return runPipeline(message.sessionId, message.meta, message.config);
   }
 }
 
@@ -74,11 +73,12 @@ async function handle(message: ToOffscreenMessage): Promise<Ack | AudioLevels | 
  * Transcription et export. Tourne ici plutôt que dans le service worker parce
  * qu'un appel réseau de plusieurs minutes survivrait mal à la mise en veille
  * d'un service worker MV3, et parce que `URL.createObjectURL` n'y existe pas.
+ *
+ * La config arrive par message : ce document n'a accès qu'à `chrome.runtime`.
  */
-async function runPipeline(sessionId: string, meta: SessionMeta): Promise<PipelineReport> {
+async function runPipeline(sessionId: string, meta: SessionMeta, config: Config): Promise<PipelineReport> {
   const empty = { downloads: [] as DownloadRequest[], failedChunks: [], transcribedCount: 0, hadSegments: false };
   try {
-    const config = await loadConfig();
     const capabilities = resolveCapabilities(config);
     const provider = createProvider(config);
 
@@ -110,10 +110,12 @@ async function runPipeline(sessionId: string, meta: SessionMeta): Promise<Pipeli
       if (track) downloads.push(audioDownload(meta, track));
     }
 
+    const firstFailure = outcome.failures[0];
     return {
       ok: true,
       downloads,
       failedChunks: outcome.failedChunks,
+      ...(firstFailure ? { failureReason: firstFailure.error } : {}),
       transcribedCount: outcome.transcribedCount,
       hadSegments: outcome.hadSegments,
     };

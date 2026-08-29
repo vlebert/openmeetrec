@@ -18,6 +18,11 @@ export interface TranscriptionRun {
   onProgress?(done: number, total: number): void;
 }
 
+export interface ChunkFailure {
+  index: number;
+  error: string;
+}
+
 export interface TranscriptionOutcome {
   /** Vide si aucun chunk n'a renvoyé de segments. */
   segments: Segment[];
@@ -25,6 +30,8 @@ export interface TranscriptionOutcome {
   /** Faux dès qu'un chunk transcrit n'avait pas de segments : le merge dégrade. */
   hadSegments: boolean;
   failedChunks: number[];
+  /** Raison de chaque échec — sans elle, un chunk perdu est indébogable. */
+  failures: ChunkFailure[];
   /** Chunks effectivement transcrits. */
   transcribedCount: number;
 }
@@ -44,13 +51,13 @@ export async function runTranscription(run: TranscriptionRun): Promise<Transcrip
   const okChunks: ChunkInfo[] = [];
   const okSegments: Segment[][] = [];
   const okTexts: string[] = [];
-  const failedChunks: number[] = [];
+  const failures: ChunkFailure[] = [];
 
   settled.forEach((entry, index) => {
     const chunk = run.chunks[index];
     if (!chunk) return;
     if (entry.status === 'failed') {
-      failedChunks.push(chunk.index);
+      failures.push({ index: chunk.index, error: describeError(entry.error) });
       return;
     }
     okChunks.push(chunk);
@@ -67,7 +74,8 @@ export async function runTranscription(run: TranscriptionRun): Promise<Transcrip
       segments: [],
       text: mergeTexts(okChunks, okTexts),
       hadSegments: false,
-      failedChunks,
+      failedChunks: failures.map((f) => f.index),
+      failures,
       transcribedCount: okChunks.length,
     };
   }
@@ -77,7 +85,12 @@ export async function runTranscription(run: TranscriptionRun): Promise<Transcrip
     segments: merged,
     text: segmentsToText(merged),
     hadSegments: true,
-    failedChunks,
+    failedChunks: failures.map((f) => f.index),
+    failures,
     transcribedCount: okChunks.length,
   };
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

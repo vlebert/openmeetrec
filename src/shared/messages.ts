@@ -9,7 +9,7 @@
  */
 
 import type { CaptureGrant } from '@/capture/strategy';
-import type { SessionMeta } from '@/shared/types';
+import type { Config, SessionMeta } from '@/shared/types';
 
 export type SessionStatus = 'idle' | 'recording' | 'processing' | 'done' | 'error';
 
@@ -86,7 +86,14 @@ export type ToOffscreenMessage =
       keepFullTrack: boolean;
     }
   | { target: 'offscreen'; type: 'STOP_CAPTURE' }
-  | { target: 'offscreen'; type: 'RUN_PIPELINE'; sessionId: string; meta: SessionMeta }
+  | {
+      target: 'offscreen';
+      type: 'RUN_PIPELINE';
+      sessionId: string;
+      meta: SessionMeta;
+      /** Transmise par message : l'offscreen n'a pas accès à `chrome.storage`. */
+      config: Config;
+    }
   | { target: 'offscreen'; type: 'GET_LEVELS' };
 
 export type ExtensionMessage = ToWorkerMessage | ToOffscreenMessage;
@@ -112,6 +119,8 @@ export interface PipelineReport {
   error?: SessionError;
   downloads: DownloadRequest[];
   failedChunks: number[];
+  /** Raison du premier échec, pour un message d'erreur exploitable. */
+  failureReason?: string;
   transcribedCount: number;
   hadSegments: boolean;
 }

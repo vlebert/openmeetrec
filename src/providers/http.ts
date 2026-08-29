@@ -101,7 +101,11 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
     }
   }
 
+  /**
+   * `bind` obligatoire : appeler `this.fetch(...)` invoquerait le `fetch` natif
+   * avec `this` = le provider, ce que Chromium refuse (« Illegal invocation »).
+   */
   private get fetch(): typeof fetch {
-    return this.options.fetchImpl ?? globalThis.fetch;
+    return this.options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 }

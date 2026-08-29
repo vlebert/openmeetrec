@@ -202,6 +202,7 @@ async function transcribeAndExport(): Promise<void> {
       type: 'RUN_PIPELINE',
       sessionId: state.sessionId,
       meta,
+      config,
     } satisfies ToOffscreenMessage)) as PipelineReport;
   } catch (error) {
     await fail(toSessionError(error));
@@ -232,7 +233,10 @@ async function transcribeAndExport(): Promise<void> {
     chunkCount: report.transcribedCount,
     error:
       report.failedChunks.length > 0
-        ? { code: 'internal', message: `${report.failedChunks.length} chunk(s) non transcrit(s)` }
+        ? {
+            code: 'internal',
+            message: `${report.failedChunks.length} chunk(s) non transcrit(s)${report.failureReason ? ` : ${report.failureReason}` : ''}`,
+          }
         : null,
   });
 }

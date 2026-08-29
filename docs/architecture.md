@@ -231,6 +231,21 @@ Le service worker garde ce que lui seul peut faire : l'état, et `chrome.downloa
 lui renvoie des URLs de blob, il déclenche les téléchargements et **attend leur fin** avant de
 fermer l'offscreen — le fermer plus tôt révoquerait les blobs en cours d'écriture.
 
+**Contrainte majeure, vérifiée en conditions réelles** : un offscreen document n'a accès qu'à
+`chrome.runtime`. Relevé dans le document lui-même, l'objet `chrome` ne contient que
+`loadTimes, csi, runtime` — ni `chrome.storage`, ni `chrome.downloads`, ni `chrome.permissions`.
+
+Conséquences sur l'architecture :
+
+- la config (clé API comprise) est **transmise dans le message** `RUN_PIPELINE`, elle n'est
+  jamais relue depuis l'offscreen ;
+- tout ce qui touche à une API d'extension remonte au service worker par message ;
+- `navigator.storage` (OPFS), `fetch` et les API Web restent disponibles normalement.
+
+Corollaire de méthode : `loadConfig` n'attrape plus les erreurs de `chrome.storage`. Un `catch`
+silencieux y renvoyait la config par défaut, ce qui transformait « l'API n'existe pas dans ce
+contexte » en « transcription avec le mauvais provider et sans clé ».
+
 ## 4. Chunking au fil de l'eau
 
 ### 4.1 Pourquoi pas le record-then-slice
@@ -462,6 +477,16 @@ Chromium headful sur le display VNC de la machine (`DISPLAY=:1`, pas besoin de x
 - `options.spec.ts` : config persistée, « tester la clé » mocké, clé jamais loggée.
 
 **Provider mock obligatoire** : pas de réseau, pas de clé API en CI.
+
+**Limite dure, constatée** : `activeTab` ne peut pas être accordé par automatisation. Le grant
+n'existe que si l'utilisateur invoque réellement l'extension (clic sur l'icône, raccourci clavier,
+menu contextuel) ; Playwright ne pilote pas l'UI du navigateur, et `chrome.action.openPopup()`
+appelé depuis le service worker ne l'accorde pas non plus. `getMediaStreamId` répond alors
+« Extension has not been invoked for the current page ».
+
+Autrement dit : **le vrai appel `tabCapture` restera hors de portée des tests automatisés**, et
+c'est un point de vérification manuelle permanent. Un test d'intégration ne peut couvrir que ce
+qui vient après le grant, en substituant la stratégie de capture.
 
 ### 10.4 Page fixture WebRTC (`tests/fixtures/meeting-page.html`)
 
