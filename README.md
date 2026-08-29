@@ -45,6 +45,10 @@ Fait :
   d'intégration substitue la stratégie de capture et couvre tout ce qui vient après.
 - Les identifiants de locuteurs sont attribués chunk par chunk et ne sont pas rapprochés entre
   chunks ; le markdown exporté le signale.
+- **Les timestamps renvoyés par le provider sont repris tels quels.** Un provider qui daterait un
+  segment hors des bornes de son propre chunk produirait un transcript incohérent, sans
+  avertissement. Constaté en test avec un faux endpoint mal réglé ; reste à décider s'il faut
+  écarter ou borner ces segments.
 
 ## Développement
 
@@ -53,10 +57,28 @@ npm install
 npm test          # unitaires (Vitest) — logique pure, sans navigateur
 npm run typecheck
 npm run build     # produit dist/, chargeable via chrome://extensions (mode développeur)
+npm run test:e2e  # intégration : session complète dans Chromium (~1 min)
 ```
 
 Le build écrit une extension unpacked dans `dist/` : activez le mode développeur dans
 `chrome://extensions`, puis « Charger l'extension non empaquetée » et pointez sur `dist/`.
+
+### Lancer les tests d'intégration
+
+Ils ont besoin d'un display X (headful) et d'un Chromium. Sur une machine sans écran, un serveur
+VNC suffit — inutile d'installer xvfb :
+
+```bash
+DISPLAY=:1 npm run test:e2e
+```
+
+Playwright télécharge normalement son propre Chromium (`npx playwright install chromium`). Si un
+build est déjà présent sur la machine avec une révision différente de celle qu'attend Playwright,
+pointez dessus plutôt que de retélécharger :
+
+```bash
+OMR_CHROMIUM=~/.cache/ms-playwright/chromium-1232/chrome-linux64/chrome DISPLAY=:1 npm run test:e2e
+```
 
 ## Choix structurants
 

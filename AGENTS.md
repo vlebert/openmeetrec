@@ -21,6 +21,9 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
   Le build de test substitue deux modules (stratégie de capture, durées de chunk) ; le code de
   production n'embarque rien de spécifique aux tests. `activeTab` étant impossible à obtenir par
   automatisation, le vrai `chrome.tabCapture` reste vérifié à la main.
+- Sur cette machine : `OMR_CHROMIUM=~/.cache/ms-playwright/chromium-1232/chrome-linux64/chrome`,
+  car la révision attendue par Playwright (1234) n'est pas installée et on ne retélécharge pas de
+  navigateur pour deux révisions d'écart.
 - Firefox exploratoire : `firefox-mcp` (Firefox réel VNC) — voir `docs/testing-firefox.md` (à créer).
 - Ne pas ajouter de dépendance sans justification.
 
