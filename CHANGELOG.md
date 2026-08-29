@@ -6,8 +6,13 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+## [0.3.0] - 2026-08-30
+
 ### Ajouté
 
+- Bouton « Retry transcription » dans le popup : après un échec (réseau, clé, overload API), les
+  chunks restent en OPFS et le pipeline complet peut être relancé sur la même session, sans
+  réenregistrer.
 - `npm run test:real-api` : validation manuelle du pipeline contre une vraie API (Mistral/OpenAI),
   hors CI et hors `npm test` — découpe un fichier audio réel en chunks via `ffmpeg`, clé API et
   fichier audio fournis par variables d'environnement, jamais commités.
@@ -18,6 +23,13 @@ jusqu'à la version suivante.
   un seul paragraphe (un tour de parole), au lieu d'un paragraphe par segment brut renvoyé par
   l'API (~10s). Le regroupement s'arrête à chaque frontière de chunk, car les identifiants de
   speaker ne sont pas appariés d'un chunk à l'autre.
+
+### Corrigé
+
+- `downloadAndWait` restait bloqué indéfiniment quand le fichier téléchargé était minuscule (ex.
+  transcription totalement échouée) : le téléchargement se terminait parfois avant que le listener
+  `chrome.downloads.onChanged` ne soit posé. L'état courant du téléchargement est maintenant vérifié
+  en plus des évènements futurs.
 
 ## [0.2.0] - 2026-08-29
 
