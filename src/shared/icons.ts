@@ -21,3 +21,24 @@ const paths = (variant: 'idle' | 'rec'): IconPaths => ({
 
 export const IDLE_ICON = paths('idle');
 export const RECORDING_ICON = paths('rec');
+
+/**
+ * Absolutise un jeu d'icônes avant de le passer à `chrome.action.setIcon`.
+ *
+ * Les chemins ci-dessus sont ceux du manifest, donc relatifs à la racine de
+ * l'extension. Mais `setIcon` appelé depuis le service worker résout un chemin
+ * relatif par rapport au *script du worker* : `assets/icon-rec-16.png` était
+ * cherché dans `background/assets/`, et l'appel échouait sur un « Failed to set
+ * icon: Failed to fetch » — l'icône ne changeait jamais, seul le badge bougeait.
+ *
+ * `toUrl` est injecté (`chrome.runtime.getURL`) pour que ce module reste
+ * testable sans navigateur.
+ */
+export function absoluteIcon(icon: IconPaths, toUrl: (path: string) => string): IconPaths {
+  return {
+    '16': toUrl(icon['16']),
+    '32': toUrl(icon['32']),
+    '48': toUrl(icon['48']),
+    '128': toUrl(icon['128']),
+  };
+}

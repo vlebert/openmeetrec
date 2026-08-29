@@ -12,7 +12,7 @@
 import { detectStrategyId } from '@/capture/detect';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { loadConfig } from '@/config/storage';
-import { IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
+import { absoluteIcon, IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
 import {
   IDLE_STATE,
   isForWorker,
@@ -284,7 +284,14 @@ async function writeState(state: SessionState): Promise<void> {
  */
 function syncAction(state: SessionState): void {
   const recording = state.status === 'recording';
-  void chrome.action.setIcon({ path: recording ? RECORDING_ICON : IDLE_ICON });
+  const icon = absoluteIcon(recording ? RECORDING_ICON : IDLE_ICON, (path) =>
+    chrome.runtime.getURL(path),
+  );
+  // Pas de `void` ici : un rejet silencieux de setIcon est précisément ce qui a
+  // laissé passer l'icône figée en gris pendant l'enregistrement.
+  chrome.action.setIcon({ path: icon }).catch((error: unknown) => {
+    console.warn('[openmeetrec] toolbar icon not updated', error);
+  });
   if (recording) {
     void chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
     void chrome.action.setBadgeText({ text: 'REC' });
