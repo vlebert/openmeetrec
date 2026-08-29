@@ -24,6 +24,8 @@ dans « Non publié ».
 
 - Vumètres (micro/onglet) : passage d'une échelle RMS linéaire à une échelle en dB — une voix
   normale restait quasi invisible sur la barre, l'oreille perçoit le volume de façon logarithmique.
+- Transcription exportée : le blockquote (`> …`) est retiré, la transcription est en markdown
+  simple — il n'apportait rien de plus qu'un formatage superflu.
 
 ### Corrigé
 

@@ -88,12 +88,12 @@ describe('buildFrontmatter', () => {
 });
 
 describe('buildBody', () => {
-  it('rend un blockquote unique sans diarization', () => {
+  it('rend le texte brut sans diarization', () => {
     const body = buildBody(doc({ text: 'Bonjour tout le monde.' }));
-    expect(body).toBe('> Bonjour tout le monde.');
+    expect(body).toBe('Bonjour tout le monde.');
   });
 
-  it('rend un blockquote par segment avec diarization', () => {
+  it('rend un paragraphe par segment avec diarization', () => {
     const body = buildBody(
       doc({
         diarized: true,
@@ -103,9 +103,7 @@ describe('buildBody', () => {
         ],
       }),
     );
-    expect(body).toBe(
-      ['> **Speaker 0** (00:00:12): Bonjour.', '>', '> **Speaker 1** (00:00:45): Salut.'].join('\n'),
-    );
+    expect(body).toBe(['**Speaker 0** (00:00:12): Bonjour.', '', '**Speaker 1** (00:00:45): Salut.'].join('\n'));
   });
 
   it('recompose le texte depuis les segments quand la diarization est off', () => {
@@ -117,7 +115,7 @@ describe('buildBody', () => {
         ],
       }),
     );
-    expect(body).toBe('> Un. Deux.');
+    expect(body).toBe('Un. Deux.');
   });
 
   it('insère des sections de chunk quand des bornes sont fournies', () => {
@@ -133,13 +131,13 @@ describe('buildBody', () => {
     );
     expect(body).toBe(
       [
-        '> **Chunk 1**',
-        '>',
-        '> **Speaker 0** (00:00:00): Avant.',
-        '>',
-        '> **Chunk 2**',
-        '>',
-        '> **Speaker 0** (00:02:00): Après.',
+        '**Chunk 1**',
+        '',
+        '**Speaker 0** (00:00:00): Avant.',
+        '',
+        '**Chunk 2**',
+        '',
+        '**Speaker 0** (00:02:00): Après.',
       ].join('\n'),
     );
   });
@@ -184,14 +182,14 @@ describe('buildMarkdown', () => {
   it('assemble frontmatter puis corps', () => {
     const md = buildMarkdown(doc({ text: 'Bonjour.' }));
     expect(md.startsWith('---\n')).toBe(true);
-    expect(md.trimEnd().endsWith('> Bonjour.')).toBe(true);
+    expect(md.trimEnd().endsWith('Bonjour.')).toBe(true);
     expect(md.endsWith('\n')).toBe(true);
   });
 
   it('insère les notes entre le frontmatter et la transcription', () => {
     const md = buildMarkdown(doc({ text: 'Bonjour.', hadSegments: false, chunkCount: 2 }));
     expect(md.indexOf('**Notes**')).toBeGreaterThan(md.indexOf('---'));
-    expect(md.indexOf('**Notes**')).toBeLessThan(md.indexOf('> Bonjour.'));
+    expect(md.indexOf('**Notes**')).toBeLessThan(md.indexOf('Bonjour.'));
   });
 });
 

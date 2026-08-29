@@ -1,7 +1,7 @@
 /**
  * Génération du markdown exporté. Module PUR.
  *
- * Format : frontmatter YAML + transcription en blockquote (PRD §7).
+ * Format : frontmatter YAML + transcription en markdown simple (PRD §7).
  */
 
 import type { Segment, SessionMeta } from '@/shared/types';
@@ -94,10 +94,6 @@ export function buildWarnings(doc: TranscriptDocument): string[] {
   return warnings;
 }
 
-function blockquote(lines: readonly string[]): string {
-  return lines.map((line) => (line === '' ? '>' : `> ${line}`)).join('\n');
-}
-
 export function buildBody(doc: TranscriptDocument): string {
   if (doc.diarized && doc.segments && doc.segments.length > 0) {
     const boundaries = doc.chunkBoundaries ?? [];
@@ -113,7 +109,7 @@ export function buildBody(doc: TranscriptDocument): string {
       if (lines.length > 0) lines.push('');
       lines.push(`**${formatSpeaker(seg.speakerId)}** (${formatTimestamp(seg.start)}): ${seg.text.trim()}`);
     });
-    return blockquote(lines);
+    return lines.join('\n');
   }
 
   const text =
@@ -123,7 +119,7 @@ export function buildBody(doc: TranscriptDocument): string {
       .filter(Boolean)
       .join(' ');
 
-  return blockquote([text.trim()]);
+  return text.trim();
 }
 
 export function buildMarkdown(doc: TranscriptDocument): string {
