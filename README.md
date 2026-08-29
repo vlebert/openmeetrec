@@ -15,7 +15,7 @@ Extension de navigateur **open source, privacy-first et cross-browser** pour enr
 
 Synthèse de plusieurs recherches :
 - Le terrain « extension OSS auditable, cross-browser, avec pipeline LLM local optionnel » est largement vacant.
-- La logique de pipeline (chunking, conversion, merge, 2-step LLM) s'inspire du projet Python [`supervoxtral`](../../py/supervoxtral) et doit être portée en TS/Web Audio.
+- La logique de pipeline (chunking, conversion, merge) s'inspire du projet Python [`supervoxtral`](../../py/supervoxtral) et doit être portée en TS/Web Audio. NB : supervoxtral fait aussi une 2e étape LLM (transformation) qui est hors scope MVP ici (transcription seule).
 - La capture audio doit fonctionner sur Chromium **et** Firefox, ce qui impose deux stratégies de capture (`tabCapture` côté Chromium, interception WebRTC en MAIN world côté Firefox).
 
 ## Licence

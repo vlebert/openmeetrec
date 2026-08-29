@@ -24,4 +24,4 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
 
 - PRD : `docs/PRD.md`
 - Architecture : `docs/architecture.md` (inclut la stratégie d'auto-contrôle)
-- Pipeline inspiré de `~/dev/py/supervoxtral` (chunking, merge, 2-step LLM) — à porter en TS.
+- Pipeline inspiré de `~/dev/py/supervoxtral` (chunking, merge, conversion) — à porter en TS. NB : supervoxtral fait aussi une 2e étape LLM (transformation) qui est **hors scope MVP** ici (transcription seule).
