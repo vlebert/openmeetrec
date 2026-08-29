@@ -21,13 +21,27 @@ Fait :
 - Scaffolding : TypeScript strict, Vite, manifest MV3, build.
 - Logique pure testée : planification des chunks, merge des segments, config, presets de providers,
   backoff, sémaphore, format markdown, provider mock.
+- Chaîne de capture : popup → service worker → offscreen document, mix micro + onglet avec
+  ré-injection du son, chunks écrits en OPFS pendant l'enregistrement.
+- Transcription : providers Mistral / OpenAI / custom, pipeline chunks → merge → export Markdown,
+  téléchargement en fin de session.
+- UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options).
 
 À venir :
 
-- Plomberie extension : service worker, offscreen document, mix audio, `ChunkScheduler`.
-- Providers réseau (Mistral, OpenAI, custom) et pipeline complet.
-- UI popup / session / paramètres.
+- Page de session (`ui/record.html`) : suivi détaillé hors popup.
+- Validation sur navigateur réel : l'extension n'a encore jamais été chargée dans Chromium
+  (voir « Limites connues »).
 - Tests d'intégration Playwright avec page fixture WebRTC.
+- Conversion 16 kHz mono en repli si une API refuse le webm/opus brut.
+
+## Limites connues
+
+- **Non validé en conditions réelles.** Le build produit un `dist/` conforme au manifest et les
+  133 tests unitaires passent, mais aucune session complète n'a encore été enregistrée dans un
+  navigateur : il faut charger l'extension non empaquetée et faire une vraie visio.
+- Les identifiants de locuteurs sont attribués chunk par chunk et ne sont pas rapprochés entre
+  chunks ; le markdown exporté le signale.
 
 ## Développement
 

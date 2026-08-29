@@ -9,6 +9,7 @@
  */
 
 import type { CaptureGrant } from '@/capture/strategy';
+import type { SessionMeta } from '@/shared/types';
 
 export type SessionStatus = 'idle' | 'recording' | 'processing' | 'done' | 'error';
 
@@ -36,6 +37,10 @@ export interface SessionState {
   duration: number;
   chunkCount: number;
   micEnabled: boolean;
+  /** Avancement de la transcription pendant `processing`. */
+  progress: { done: number; total: number } | null;
+  /** Chemins des fichiers téléchargés en fin de session. */
+  downloads: string[];
   error: SessionError | null;
 }
 
@@ -48,6 +53,8 @@ export const IDLE_STATE: SessionState = {
   duration: 0,
   chunkCount: 0,
   micEnabled: true,
+  progress: null,
+  downloads: [],
   error: null,
 };
 
@@ -65,6 +72,7 @@ export type ToWorkerMessage =
   | { target: 'sw'; type: 'RESET' }
   | { target: 'sw'; type: 'CHUNK_READY'; index: number; start: number; end: number }
   | { target: 'sw'; type: 'RECORDING_STOPPED'; duration: number; chunkCount: number }
+  | { target: 'sw'; type: 'PIPELINE_PROGRESS'; done: number; total: number }
   | { target: 'sw'; type: 'CAPTURE_ERROR'; error: SessionError };
 
 /** Messages traités par l'offscreen document. */
@@ -78,6 +86,7 @@ export type ToOffscreenMessage =
       keepFullTrack: boolean;
     }
   | { target: 'offscreen'; type: 'STOP_CAPTURE' }
+  | { target: 'offscreen'; type: 'RUN_PIPELINE'; sessionId: string; meta: SessionMeta }
   | { target: 'offscreen'; type: 'GET_LEVELS' };
 
 export type ExtensionMessage = ToWorkerMessage | ToOffscreenMessage;
@@ -85,6 +94,26 @@ export type ExtensionMessage = ToWorkerMessage | ToOffscreenMessage;
 export interface Ack {
   ok: boolean;
   error?: SessionError;
+}
+
+/**
+ * Fichier prêt à télécharger. L'URL est un blob créé dans l'offscreen document :
+ * `URL.createObjectURL` n'existe pas dans un service worker, et un `data:` URL
+ * ne passe pas à l'échelle d'une piste audio d'une heure. Le service worker,
+ * lui, est le seul à pouvoir appeler `chrome.downloads`.
+ */
+export interface DownloadRequest {
+  url: string;
+  filename: string;
+}
+
+export interface PipelineReport {
+  ok: boolean;
+  error?: SessionError;
+  downloads: DownloadRequest[];
+  failedChunks: number[];
+  transcribedCount: number;
+  hadSegments: boolean;
 }
 
 export function isForWorker(message: unknown): message is ToWorkerMessage {

@@ -2,12 +2,58 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>OpenMeetRec — paramètres</title>
+    <title>OpenMeetRec — réglages</title>
+    <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <main id="app">
-      <h1>Paramètres</h1>
-      <p>Provider, modèle et clés API.</p>
+    <main>
+      <h1>Réglages</h1>
+
+      <fieldset>
+        <legend>Transcription</legend>
+
+        <label for="provider">Fournisseur</label>
+        <select id="provider"></select>
+
+        <label for="model">Modèle</label>
+        <select id="model"></select>
+        <input id="model-custom" type="text" placeholder="identifiant du modèle" hidden />
+
+        <label for="api-key">Clé API</label>
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+        <p class="hint" id="key-hint"></p>
+        <button id="test-key" type="button">Tester la clé</button>
+        <span id="test-result" class="hint"></span>
+      </fieldset>
+
+      <fieldset id="custom-fields" hidden>
+        <legend>Endpoint custom</legend>
+        <label for="custom-endpoint">URL (HTTPS)</label>
+        <input id="custom-endpoint" type="url" placeholder="https://…/v1/audio/transcriptions" />
+        <label class="check"><input type="checkbox" id="custom-segments" /> Renvoie des segments horodatés</label>
+        <label class="check"><input type="checkbox" id="custom-diarization" /> Fait de la diarization</label>
+        <p class="hint">
+          Un endpoint custom nécessite une autorisation d'accès réseau supplémentaire,
+          demandée au moment de l'enregistrement.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Sortie</legend>
+        <label class="check"><input type="checkbox" id="diarize" /> Identifier les locuteurs</label>
+        <p class="hint" id="diarize-hint"></p>
+        <label class="check"><input type="checkbox" id="download-audio" /> Télécharger aussi l'audio</label>
+        <label for="language">Langue</label>
+        <input id="language" type="text" placeholder="auto" size="8" />
+        <p class="hint">Code ISO (fr, en…) ; vide = détection automatique.</p>
+      </fieldset>
+
+      <div class="actions">
+        <button id="save" type="button">Enregistrer</button>
+        <span id="status" class="hint"></span>
+      </div>
+
+      <ul id="problems" class="problems"></ul>
     </main>
     <script type="module" src="options.js"></script>
   </body>

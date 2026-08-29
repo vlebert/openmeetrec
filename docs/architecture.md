@@ -88,6 +88,9 @@ openmeetrec/
 │   │   └── concurrency.ts          # sémaphore / mapLimit (PUR)
 │   ├── providers/
 │   │   ├── base.ts                 # interface + erreurs
+│   │   ├── http.ts                 # socle multipart + retry
+│   │   ├── parse.ts                # lecture des réponses (PUR)
+│   │   ├── factory.ts              # config → provider (PUR)
 │   │   ├── mistral.ts              # Voxtral + diarization
 │   │   ├── openai.ts               # Whisper verbose_json
 │   │   ├── custom.ts               # endpoint + modèle libres
@@ -211,6 +214,22 @@ chaque message. Le popup, lui, est sans état — il interroge le service worker
 
 Machine à états : `idle → recording → processing → done`, plus `error` atteignable depuis
 n'importe quel état. `recording` et `processing` refusent tout nouveau départ (F-CAP-08).
+
+Au réveil, le service worker rattrape les sessions orphelines : un état `recording` ou
+`processing` sans offscreen document signifie que le navigateur a interrompu la session, et
+qu'aucun message ne viendra plus la faire avancer. Sans ce rattrapage, elle bloquerait
+définitivement les suivantes.
+
+### 3.6 Où tourne le pipeline
+
+La transcription tourne dans l'**offscreen document**, pas dans le service worker :
+
+- un appel réseau de plusieurs minutes survit mal à la mise en veille d'un service worker MV3 ;
+- `URL.createObjectURL` n'existe pas dans un service worker, or l'export a besoin de blobs.
+
+Le service worker garde ce que lui seul peut faire : l'état, et `chrome.downloads`. L'offscreen
+lui renvoie des URLs de blob, il déclenche les téléchargements et **attend leur fin** avant de
+fermer l'offscreen — le fermer plus tôt révoquerait les blobs en cours d'écriture.
 
 ## 4. Chunking au fil de l'eau
 

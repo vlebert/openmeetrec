@@ -17,11 +17,14 @@ import {
   isForWorker,
   platformFromUrl,
   type Ack,
+  type DownloadRequest,
+  type PipelineReport,
   type SessionError,
   type SessionState,
   type ToOffscreenMessage,
   type ToWorkerMessage,
 } from '@/shared/messages';
+import type { SessionMeta } from '@/shared/types';
 
 const STATE_KEY = 'sessionState';
 const OFFSCREEN_PATH = 'offscreen/offscreen.html';
@@ -31,6 +34,23 @@ chrome.runtime.onInstalled.addListener(() => {
     console.warn('[openmeetrec] aucune stratégie de capture disponible sur ce navigateur');
   }
 });
+
+/**
+ * Au réveil du service worker : si l'état dit « en cours » alors que l'offscreen
+ * document a disparu, plus personne ne viendra le faire avancer. Sans ce
+ * rattrapage, une session interrompue bloquerait définitivement les suivantes
+ * (F-CAP-08).
+ */
+void (async () => {
+  const state = await readState();
+  if (state.status !== 'recording' && state.status !== 'processing') return;
+  if (await hasOffscreen()) return;
+  await writeState({
+    ...state,
+    status: 'error',
+    error: { code: 'internal', message: 'Session interrompue par le navigateur' },
+  });
+})();
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   if (!isForWorker(message)) return false;
@@ -76,10 +96,12 @@ async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
         duration: message.duration,
         chunkCount: message.chunkCount,
       });
-      await closeOffscreen();
-      // TODO(F-TR-01..07) : transcription des chunks, merge et export Markdown.
-      // Tant que le pipeline n'existe pas, la session s'arrête ici.
-      await writeState({ ...(await readState()), status: 'done' });
+      await transcribeAndExport();
+      return { ok: true };
+    }
+    case 'PIPELINE_PROGRESS': {
+      const state = await readState();
+      await writeState({ ...state, progress: { done: message.done, total: message.total } });
       return { ok: true };
     }
     case 'CAPTURE_ERROR':
@@ -148,6 +170,86 @@ async function stopRecording(): Promise<Ack> {
     await writeState({ ...(await readState()), status: 'done' });
   }
   return { ok: true };
+}
+
+/**
+ * Enchaîne transcription (dans l'offscreen) et téléchargements (ici : seul le
+ * service worker a accès à `chrome.downloads`). L'offscreen n'est fermé qu'une
+ * fois les téléchargements terminés — le fermer plus tôt révoquerait les blobs
+ * en cours d'écriture.
+ */
+async function transcribeAndExport(): Promise<void> {
+  const state = await readState();
+  if (state.sessionId === null) {
+    await fail({ code: 'internal', message: 'session inconnue' });
+    return;
+  }
+
+  const config = await loadConfig();
+  const meta: SessionMeta = {
+    provider: config.provider,
+    model: config.model,
+    date: new Date().toISOString(),
+    duration: state.duration,
+    platform: state.platform,
+    extensionVersion: chrome.runtime.getManifest().version,
+  };
+
+  let report: PipelineReport;
+  try {
+    report = (await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'RUN_PIPELINE',
+      sessionId: state.sessionId,
+      meta,
+    } satisfies ToOffscreenMessage)) as PipelineReport;
+  } catch (error) {
+    await fail(toSessionError(error));
+    return;
+  }
+
+  if (!report.ok) {
+    await fail(report.error ?? { code: 'internal', message: 'transcription échouée' });
+    return;
+  }
+
+  const filenames: string[] = [];
+  for (const download of report.downloads) {
+    try {
+      filenames.push(await downloadAndWait(download));
+    } catch (error) {
+      await fail(toSessionError(error));
+      return;
+    }
+  }
+
+  await closeOffscreen();
+  await writeState({
+    ...(await readState()),
+    status: 'done',
+    progress: null,
+    downloads: filenames,
+    chunkCount: report.transcribedCount,
+    error:
+      report.failedChunks.length > 0
+        ? { code: 'internal', message: `${report.failedChunks.length} chunk(s) non transcrit(s)` }
+        : null,
+  });
+}
+
+async function downloadAndWait(request: DownloadRequest): Promise<string> {
+  const id = await chrome.downloads.download({ url: request.url, filename: request.filename, saveAs: false });
+  await new Promise<void>((resolve) => {
+    const listener = (delta: chrome.downloads.DownloadDelta): void => {
+      if (delta.id !== id || !delta.state) return;
+      const done = delta.state.current === 'complete' || delta.state.current === 'interrupted';
+      if (!done) return;
+      chrome.downloads.onChanged.removeListener(listener);
+      resolve();
+    };
+    chrome.downloads.onChanged.addListener(listener);
+  });
+  return request.filename;
 }
 
 async function fail(error: SessionError): Promise<void> {

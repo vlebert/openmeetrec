@@ -112,9 +112,13 @@ function statusLabel(current: SessionState): string {
     case 'recording':
       return `Enregistrement — ${current.chunkCount} chunk(s)`;
     case 'processing':
-      return 'Finalisation…';
+      return current.progress
+        ? `Transcription ${current.progress.done}/${current.progress.total}…`
+        : 'Finalisation…';
     case 'done':
-      return `Terminé — ${current.chunkCount} chunk(s), ${formatTimestamp(current.duration)}`;
+      return current.downloads.length > 0
+        ? `Terminé — ${current.downloads.join(', ')}`
+        : `Terminé — ${current.chunkCount} chunk(s), ${formatTimestamp(current.duration)}`;
     case 'error':
       return 'Erreur';
   }
