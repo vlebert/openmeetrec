@@ -12,6 +12,7 @@
 import { detectStrategyId } from '@/capture/detect';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { loadConfig } from '@/config/storage';
+import { IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
 import {
   IDLE_STATE,
   isForWorker,
@@ -270,12 +271,21 @@ async function readState(): Promise<SessionState> {
 
 async function writeState(state: SessionState): Promise<void> {
   await chrome.storage.session.set({ [STATE_KEY]: state });
-  syncBadge(state);
+  syncAction(state);
 }
 
-/** Seul indicateur qui reste visible en permanence : le popup peut disparaître dès qu'on change d'onglet. */
-function syncBadge(state: SessionState): void {
-  if (state.status === 'recording') {
+/**
+ * Seul indicateur qui reste visible en permanence : le popup peut disparaître dès
+ * qu'on change d'onglet.
+ *
+ * L'icône porte l'état (point rouge en cours, gris au repos) et le badge le
+ * redit en toutes lettres : la couleur seule ne suffit pas, et le point rouge du
+ * logo mentirait s'il restait allumé hors enregistrement.
+ */
+function syncAction(state: SessionState): void {
+  const recording = state.status === 'recording';
+  void chrome.action.setIcon({ path: recording ? RECORDING_ICON : IDLE_ICON });
+  if (recording) {
     void chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
     void chrome.action.setBadgeText({ text: 'REC' });
   } else {

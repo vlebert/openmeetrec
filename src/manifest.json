@@ -6,13 +6,25 @@
   "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads"],
   "host_permissions": ["https://api.mistral.ai/*", "https://api.openai.com/*"],
   "optional_host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "assets/icon-rec-16.png",
+    "32": "assets/icon-rec-32.png",
+    "48": "assets/icon-rec-48.png",
+    "128": "assets/icon-rec-128.png"
+  },
   "background": {
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
   "action": {
     "default_popup": "ui/popup.html",
-    "default_title": "OpenMeetRec"
+    "default_title": "OpenMeetRec",
+    "default_icon": {
+      "16": "assets/icon-idle-16.png",
+      "32": "assets/icon-idle-32.png",
+      "48": "assets/icon-idle-48.png",
+      "128": "assets/icon-idle-128.png"
+    }
   },
   "options_page": "ui/options.html",
   "minimum_chrome_version": "116"

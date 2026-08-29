@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '@/manifest.json';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
 
 /**
  * Garde-fou de l'audit de permissions : toute permission ajoutée au manifest
@@ -40,6 +41,26 @@ describe('manifest', () => {
 
   it('ouvre le popup sur l onglet courant plutôt qu un onglet dédié', () => {
     expect(manifest.action.default_popup).toBe('ui/popup.html');
+  });
+
+  it('déclare une icône présente dans les sources pour chaque taille', () => {
+    for (const declared of [manifest.icons, manifest.action.default_icon, IDLE_ICON, RECORDING_ICON]) {
+      expect(Object.keys(declared).sort()).toEqual(['128', '16', '32', '48']);
+      for (const path of Object.values(declared)) {
+        const file = fileURLToPath(new URL(`../../src/${path}`, import.meta.url));
+        expect(existsSync(file), `icône déclarée et absente : ${path}`).toBe(true);
+      }
+    }
+  });
+
+  /**
+   * L'icône par défaut est celle du repos : si le manifest embarquait la version
+   * au point rouge, la barre d'outils annoncerait un enregistrement en cours dès
+   * l'installation, et jusqu'au premier changement d'état.
+   */
+  it('affiche l icône de repos tant que le service worker n a rien dit', () => {
+    expect(manifest.action.default_icon).toEqual(IDLE_ICON);
+    expect(manifest.action.default_icon).not.toEqual(RECORDING_ICON);
   });
 
   it('déclare une version alignée sur le package', () => {

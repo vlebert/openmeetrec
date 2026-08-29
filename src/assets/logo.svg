@@ -1,0 +1,29 @@
+<!--
+  Logo OpenMeetRec : anneau ouvert en trois arcs (les participants autour de la
+  réunion, et l'ouverture du projet) autour du point central.
+
+  Deux versions, même géométrie, un seul détail qui change : la couleur du point.
+  Le point rouge ne fait pas partie de l'identité, il *est* l'état « en train
+  d'enregistrer » — sinon l'icône de la barre d'outils prétendrait enregistrer en
+  permanence, et le badge REC viendrait poser un deuxième rouge par-dessus.
+
+  - `logo.svg`      : point rouge. Marque du projet (README, store, page des
+                      extensions) et icône de la barre d'outils *pendant*
+                      l'enregistrement.
+  - `logo-idle.svg` : point gris. Icône de la barre d'outils au repos.
+
+  L'encre est un gris-bleu de luminosité moyenne, et non un gris foncé : l'icône
+  doit rester lisible sur un Chrome clair comme sur un Chrome sombre, où un gris
+  foncé disparaîtrait.
+
+  Les arcs sont volontairement épais et les trous larges : en dessous de 3.4 de
+  stroke, les trous se referment au rendu 16 px et l'anneau redevient un cercle.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <g fill="none" stroke="#6E7C91" stroke-width="3.4" stroke-linecap="round">
+    <path d="M17.74 3.62A12.5 12.5 0 0 1 28.43 17.31"/>
+    <path d="M25.85 23.70A12.5 12.5 0 0 1 8.65 26.11"/>
+    <path d="M4.41 20.68A12.5 12.5 0 0 1 10.92 4.58"/>
+  </g>
+  <circle cx="16" cy="16" r="5.5" fill="#E5484D"/>
+</svg>

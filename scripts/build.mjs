@@ -40,7 +40,12 @@ async function collect(dir, suffix, found = []) {
 
 await build();
 
-const statics = [join(srcDir, 'manifest.json'), ...(await collect(srcDir, '.html')), ...(await collect(srcDir, '.css'))];
+const statics = [
+  join(srcDir, 'manifest.json'),
+  ...(await collect(srcDir, '.html')),
+  ...(await collect(srcDir, '.css')),
+  ...(await collect(srcDir, '.png')),
+];
 for (const file of statics) {
   const target = join(outDir, relative(srcDir, file));
   await mkdir(dirname(target), { recursive: true });
@@ -65,6 +70,8 @@ const referenced = [
   manifest.background?.service_worker,
   manifest.action?.default_popup,
   manifest.options_page,
+  ...Object.values(manifest.icons ?? {}),
+  ...Object.values(manifest.action?.default_icon ?? {}),
 ].filter(Boolean);
 
 const missing = [];

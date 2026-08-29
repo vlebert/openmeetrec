@@ -30,6 +30,8 @@ Fait :
 - UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options), en anglais.
 - Badge « REC » sur l'icône de la barre d'outils pendant l'enregistrement : reste visible même si
   le popup s'est refermé (changement d'onglet, clic ailleurs).
+- Logo et icônes de l'extension (16/32/48/128). Le point central du logo est rouge pendant
+  l'enregistrement et gris au repos : l'icône porte l'état, en plus du badge « REC ».
 
 À venir :
 

@@ -16,9 +16,13 @@ dans « Non publié ».
   export Markdown, téléchargement en fin de session.
 - UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options), en anglais.
 - Badge « REC » sur l'icône de la barre d'outils pendant l'enregistrement, visible même popup fermé.
+- Icône de la barre d'outils au point rouge pendant l'enregistrement, au point gris au repos :
+  l'état se lit sans ouvrir le popup, et l'icône ne prétend plus enregistrer en permanence.
 - Avertissement et sections « Chunk N » dans le markdown exporté, pour signaler la rupture
   d'identification des locuteurs entre chunks (non résolue en MVP).
 - Test d'intégration bout en bout dans Chromium (`npm run test:e2e`).
+- Logo : anneau ouvert en trois arcs autour d'un point central (`src/assets/logo.svg`), décliné en
+  icônes 16/32/48/128 déclarées dans le manifest.
 
 ### Modifié
 
