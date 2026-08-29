@@ -22,6 +22,7 @@ export default defineConfig({
         'ui/popup': entry('ui/popup.ts'),
         'ui/record': entry('ui/record.ts'),
         'ui/options': entry('ui/options.ts'),
+        'ui/mic-permission': entry('ui/mic-permission.ts'),
       },
       output: {
         format: 'es',

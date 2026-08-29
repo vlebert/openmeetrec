@@ -3,7 +3,7 @@
  *
  * Le manifest référence des chemins fixes (`background/service-worker.js`,
  * `ui/popup.html`…), donc pas de hash sur les noms de fichiers et une copie
- * telle quelle des .html et du manifest.
+ * telle quelle des .html, des .css et du manifest.
  */
 
 import { build } from 'vite';
@@ -27,7 +27,7 @@ async function collect(dir, suffix, found = []) {
 
 await build();
 
-const statics = [join(srcDir, 'manifest.json'), ...(await collect(srcDir, '.html'))];
+const statics = [join(srcDir, 'manifest.json'), ...(await collect(srcDir, '.html')), ...(await collect(srcDir, '.css'))];
 for (const file of statics) {
   const target = join(outDir, relative(srcDir, file));
   await mkdir(dirname(target), { recursive: true });

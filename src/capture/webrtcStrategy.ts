@@ -1,22 +1,23 @@
 /**
- * Point d'extension Firefox — non implémenté en MVP.
+ * Point d'extension Firefox — coquille vide en MVP (PRD §2, hors scope).
  *
- * L'implémentation future interceptera les `RTCPeerConnection` en MAIN world
- * pour récupérer les pistes distantes, Firefox n'ayant pas d'équivalent à
- * `chrome.tabCapture`. La coquille existe pour figer le contrat côté
- * `CaptureStrategy` sans faire de place spéciale à Chromium dans le reste du code.
+ * Firefox n'a pas d'équivalent de `tabCapture` : la piste passera par un
+ * content script qui intercepte les `RTCPeerConnection` de la page. Le jour où
+ * on l'implémente, seul ce fichier bouge.
  */
 
-import type { CaptureStrategy } from './strategy';
+import type { CaptureGrant, CaptureStrategy } from './strategy';
 
-export class WebRTCStrategy implements CaptureStrategy {
+const UNSUPPORTED = 'Capture Firefox non supportée en MVP';
+
+export class WebRtcStrategy implements CaptureStrategy {
   readonly id = 'webrtc' as const;
 
-  async start(_tabId: number): Promise<MediaStream> {
-    throw new Error('Capture Firefox non supportée en MVP (interception WebRTC à venir).');
+  requestGrant(_tabId: number): Promise<CaptureGrant> {
+    return Promise.reject(new Error(UNSUPPORTED));
   }
 
-  stop(): void {
-    // Rien à arrêter tant que `start` throw.
+  openStream(_grant: CaptureGrant): Promise<MediaStream> {
+    return Promise.reject(new Error(UNSUPPORTED));
   }
 }

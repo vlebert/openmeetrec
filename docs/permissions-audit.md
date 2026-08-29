@@ -80,7 +80,7 @@
 
 | Permission | Pourquoi on s'en passe |
 |---|---|
-| `tabs` | `activeTab` + le `tabId` connu du popup suffisent ; pas besoin de lire la liste des onglets |
+| `tabs` | `activeTab` suffit : il donne le `tabId` **et** l'URL de l'onglet actif quand le popup est ouvert. `chrome.tabs.query`/`onRemoved`/`create` sont utilisables sans cette permission, seul l'accès aux URLs d'onglets tiers l'exigerait — et on n'en a pas besoin |
 | `scripting` / `content_scripts` | Aucune injection dans les pages en MVP |
 | `<all_urls>` en requis | Réservé au provider custom, et alors seulement en optionnel |
 | `desktopCapture` | `tabCapture` évite le picker système et l'accès à l'écran entier |

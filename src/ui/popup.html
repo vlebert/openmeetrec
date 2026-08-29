@@ -3,12 +3,33 @@
   <head>
     <meta charset="utf-8" />
     <title>OpenMeetRec</title>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main id="app">
-      <h1>OpenMeetRec</h1>
-      <p>Ouvrez ce popup depuis l'onglet de votre visioconférence, puis démarrez l'enregistrement.</p>
+      <header>
+        <h1>OpenMeetRec</h1>
+        <span id="platform" class="platform"></span>
+      </header>
+
+      <p id="status" class="status">Chargement…</p>
+      <p id="timer" class="timer" hidden>00:00:00</p>
+
+      <section class="meters" id="meters" hidden>
+        <label>Micro <span class="bar"><span id="mic-level"></span></span></label>
+        <label>Onglet <span class="bar"><span id="tab-level"></span></span></label>
+      </section>
+
+      <label class="option" id="mic-option">
+        <input type="checkbox" id="mic-enabled" checked />
+        Enregistrer aussi mon micro
+      </label>
+
       <button id="toggle" type="button" disabled>Démarrer</button>
+
+      <p id="error" class="error" hidden></p>
+      <button id="grant-mic" type="button" class="link" hidden>Autoriser le micro…</button>
+      <a id="options" href="#" class="link">Réglages</a>
     </main>
     <script type="module" src="popup.js"></script>
   </body>

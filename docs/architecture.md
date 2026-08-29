@@ -98,11 +98,13 @@ openmeetrec/
 │   │   ├── opfs.ts                 # OPFS read/write/append
 │   │   └── export.ts               # download markdown + audio
 │   ├── config/
-│   │   └── config.ts               # schéma + defaults + validation (PUR)
+│   │   ├── config.ts               # schéma + defaults + validation (PUR)
+│   │   └── storage.ts              # chrome.storage.local
 │   ├── ui/
-│   │   ├── popup.html / popup.ts
+│   │   ├── popup.html / .css / .ts
 │   │   ├── record.html / record.ts
-│   │   └── options.html / options.ts
+│   │   ├── options.html / options.ts
+│   │   └── mic-permission.html / .ts  # prompt micro (cf. §3.3)
 │   └── shared/
 │       ├── types.ts                # Segment, ChunkInfo, Config, messages
 │       ├── messages.ts             # protocole de messaging typé
@@ -127,12 +129,26 @@ C'est là que vit la logique fragile, et c'est ce qui est couvert par Vitest.
 ### 3.1 Interface (point d'extension Firefox)
 
 ```ts
+/** Jeton de capture, sérialisable dans un message. */
+interface CaptureGrant {
+  strategy: 'tabcapture' | 'webrtc';
+  streamId: string;
+}
+
 interface CaptureStrategy {
   readonly id: 'tabcapture' | 'webrtc';
-  start(tabId: number): Promise<MediaStream>;  // audio distant
-  stop(): void;
+  /** Côté service worker : autorise la capture de l'onglet désigné. */
+  requestGrant(tabId: number): Promise<CaptureGrant>;
+  /** Côté offscreen : ouvre le flux audio distant à partir du jeton. */
+  openStream(grant: CaptureGrant): Promise<MediaStream>;
 }
 ```
+
+L'interface est **en deux temps** parce que la capture Chromium l'est : l'autorisation
+s'obtient dans le service worker (seul contexte qui connaît le `tabId` et détient le grant
+`activeTab`), le flux s'ouvre dans l'offscreen document (seul contexte qui a un DOM et peut
+tenir un `MediaStream`). Le jeton fait le pont, et il traverse un message — d'où un `streamId`
+opaque plutôt qu'un objet.
 
 `webrtcStrategy.ts` est une **coquille vide** en MVP, qui throw « Firefox non supporté ». Elle matérialise le point d'extension sans l'implémenter. Quand on étendra à Firefox, on branchera l'interception WebRTC en MAIN world sans toucher au reste.
 
@@ -166,6 +182,35 @@ function detectStrategy(): CaptureStrategy {
   throw new Error('Capture non supportée sur ce navigateur.');
 }
 ```
+
+### 3.4 Autorisation du micro
+
+Contrainte Chromium : **un offscreen document ne peut pas déclencher de prompt de
+permission**. Il peut appeler `getUserMedia` — c'est même la raison d'être du motif
+`USER_MEDIA` — mais seulement si l'autorisation micro est *déjà* accordée à l'origine de
+l'extension. Sinon l'appel échoue en `NotAllowedError` sans rien afficher.
+
+D'où le parcours :
+
+1. L'offscreen tente `getUserMedia({ audio: true })`.
+2. En cas d'échec, il remonte une `SessionError { code: 'mic-permission' }` au service worker.
+3. Le popup affiche « Autoriser le micro… », qui ouvre `ui/mic-permission.html` **dans un
+   onglet** — une page d'extension classique, elle, peut afficher le prompt.
+4. Une fois accordée, l'autorisation vaut pour l'origine de l'extension, donc pour toutes les
+   sessions suivantes : ce détour n'a lieu qu'une fois.
+
+L'alternative (demander le micro depuis le popup) est fragile : le popup se ferme dès que le
+prompt prend le focus, ce qui annule la demande.
+
+### 3.5 Cycle de vie et état de session
+
+Le service worker MV3 est tué après quelques dizaines de secondes d'inactivité, alors que
+l'enregistrement continue dans l'offscreen document. L'état de session ne peut donc **pas**
+vivre dans une variable de module : il est persisté dans `chrome.storage.session` et relu à
+chaque message. Le popup, lui, est sans état — il interroge le service worker à l'ouverture.
+
+Machine à états : `idle → recording → processing → done`, plus `error` atteignable depuis
+n'importe quel état. `recording` et `processing` refusent tout nouveau départ (F-CAP-08).
 
 ## 4. Chunking au fil de l'eau
 

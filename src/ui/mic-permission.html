@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenMeetRec — autorisation micro</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main style="width: 420px">
+      <h1>Autoriser le micro</h1>
+      <p>
+        L'enregistrement se fait dans un document interne à l'extension, qui ne
+        peut pas afficher lui-même la demande d'autorisation. Cliquez ci-dessous
+        puis acceptez la demande du navigateur : l'autorisation est ensuite
+        valable pour toutes vos sessions.
+      </p>
+      <button id="grant" type="button">Demander l'accès au micro</button>
+      <p id="result" class="status"></p>
+    </main>
+    <script type="module" src="mic-permission.js"></script>
+  </body>
+</html>
