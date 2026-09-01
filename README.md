@@ -34,19 +34,22 @@ Fait :
   l'enregistrement et gris au repos : l'icône porte l'état, en plus du badge « REC ».
 - Rappel d'enregistrement : une notification système à l'ouverture d'une page de visio, sur une
   liste d'URLs pré-remplie et éditable dans les réglages. Rien n'est enregistré automatiquement.
+- Validé contre les vraies API Mistral (avec diarization) et OpenAI (`npm run test:real-api`) : le
+  pipeline transcrit un audio réel et les timestamps renvoyés tombent bien dans les bornes attendues.
 
 À venir :
 
 - Page de session (`ui/record.html`) : suivi détaillé hors popup.
 - Conversion 16 kHz mono en repli si une API refuse le webm/opus brut.
-- Outillage de validation manuelle contre une vraie API en place (`npm run test:real-api`), mais
-  jamais encore exécuté pour de vrai contre Mistral/OpenAI, ni sur une vraie visio.
+- Validation sur un enregistrement multi-chunks avec une vraie API (fait jusqu'ici sur un audio
+  court, un seul chunk), et sur une vraie visio.
 
 ## Limites connues
 
-- **Jamais confronté à une vraie API ni à une vraie visio.** Une session complète tourne dans
-  Chromium contre un faux endpoint local, mais la forme réelle des réponses Mistral/OpenAI n'a
-  jamais été vue, et aucune visioconférence réelle n'a été enregistrée.
+- **Jamais confronté à une vraie visio.** La session complète (capture → chunks → merge → export)
+  tourne dans Chromium contre un faux endpoint local, et le pipeline de transcription a été validé
+  contre les vraies API Mistral et OpenAI (`npm run test:real-api`) — mais uniquement sur un audio
+  court (un seul chunk) et hors navigateur ; aucune visioconférence réelle n'a encore été enregistrée.
 - **`chrome.tabCapture` n'est pas couvert par les tests.** Le grant `activeTab` n'existe que si
   l'utilisateur invoque lui-même l'extension ; aucune automatisation ne peut l'obtenir. Le test
   d'intégration substitue la stratégie de capture et couvre tout ce qui vient après.
@@ -56,10 +59,11 @@ Fait :
 - **Le rappel de réunion n'a pas été vu sur une vraie visio.** La reconnaissance d'URL est testée
   unitairement, mais la notification système elle-même (et le comportement des SPA comme Teams, qui
   changent d'URL sans recharger) reste à valider à la main.
-- **Les timestamps renvoyés par le provider sont repris tels quels.** Un provider qui daterait un
-  segment hors des bornes de son propre chunk produirait un transcript incohérent, sans
-  avertissement. Constaté en test avec un faux endpoint mal réglé ; reste à décider s'il faut
-  écarter ou borner ces segments.
+- **Les timestamps renvoyés par le provider sont repris tels quels, sans validation en production.**
+  Un provider qui daterait un segment hors des bornes de son propre chunk produirait un transcript
+  incohérent, sans avertissement. `npm run test:real-api` vérifie maintenant que Mistral et OpenAI
+  respectent bien ces bornes, mais rien ne s'en protège au runtime si un provider (notamment un
+  endpoint custom) déraille ; reste à décider s'il faut écarter ou borner ces segments.
 
 ## Développement
 
@@ -99,8 +103,11 @@ Mistral/OpenAI — sans payer à chaque `git push` — il y a un troisième test
 `tests/manual/real-api.manual.ts`, lancé uniquement via `npm run test:real-api`.
 
 Il découpe un vrai fichier audio (assez long pour produire plusieurs chunks) avec `ffmpeg`, envoie
-chaque chunk au provider choisi, puis écrit le markdown obtenu dans `test-results/` (ignoré par git)
-pour relecture. Rien n'est commité, rien n'est loggé — la clé API ne sert qu'à l'en-tête HTTP.
+chaque chunk au provider choisi, vérifie que les segments renvoyés ont bien un texte, des timestamps
+numériques cohérents et dans les bornes du chunk (pas de timestamps absolus ou dans une autre unité,
+qui casseraient le réassemblage en silence), puis écrit le markdown obtenu dans `test-results/`
+(ignoré par git) pour relecture. Rien n'est commité, rien n'est loggé — la clé API ne sert qu'à
+l'en-tête HTTP.
 
 Le fichier audio de test se pose dans `tests/manual/audio/` (ignoré par git, dans le dépôt pour la
 commodité du chemin). Les clés API, elles, restent hors du dépôt (ex. un fichier source dans le

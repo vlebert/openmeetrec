@@ -10,6 +10,11 @@ jusqu'à la version suivante.
 
 - Chunking par défaut : 3 min / overlap 10 s (au lieu de 5 min / 30 s) — des chunks plus courts,
   plus réactifs à transcrire au fil de l'enregistrement.
+- `npm run test:real-api` : détection de la durée de l'audio robuste aux fichiers webm de
+  MediaRecorder sans Cues/Duration dans l'en-tête (décodage complet au lieu de lire les métadonnées
+  du conteneur). Vérifie aussi que les timestamps renvoyés par le provider tombent bien dans les
+  bornes du chunk transcrit, au lieu de supposer silencieusement leur unité et leur référentiel.
+  Validé pour de vrai contre Mistral (diarization) et OpenAI.
 
 ## [0.4.0] - 2026-09-01
 

@@ -18,7 +18,44 @@ import { chunkBoundaries } from '@/audio/merge';
 import { createProvider } from '@/providers/factory';
 import { runTranscription } from '@/pipeline/pipeline';
 import { buildFilename, buildMarkdown } from '@/shared/format';
-import type { Config, ProviderId } from '@/shared/types';
+import type { TranscriptionProvider } from '@/providers/base';
+import type { ChunkInfo, Config, ProviderId, TranscriptionResult } from '@/shared/types';
+
+/** Tolérance sur les bornes attendues des timestamps, pour l'arrondi de l'encodage. */
+const TIMESTAMP_TOLERANCE_S = 2;
+
+/**
+ * Un provider réel n'est censé renvoyer que des timestamps relatifs à l'audio du
+ * chunk qu'on lui a soumis (0..durée du chunk) : c'est l'hypothèse sur laquelle
+ * `adjustTimestamps`/`mergeSegments` s'appuient pour recoller les chunks (cf.
+ * limite connue dans le README — jamais vérifiée contre une vraie réponse).
+ * Cette fonction échoue fort si un provider ne respecte pas ce contrat, plutôt
+ * que de laisser passer silencieusement un transcript incohérent.
+ */
+function assertSegmentFormat(chunk: ChunkInfo, result: TranscriptionResult, expectSegments: boolean): void {
+  if (!expectSegments) return;
+  const chunkAudioDuration = chunk.end - chunk.start;
+  if (!result.segments || result.segments.length === 0) {
+    throw new Error(`chunk ${chunk.index} : aucun segment renvoyé alors que le provider est censé en fournir`);
+  }
+  for (const seg of result.segments) {
+    if (typeof seg.text !== 'string' || seg.text.trim().length === 0) {
+      throw new Error(`chunk ${chunk.index} : segment sans texte (${JSON.stringify(seg)})`);
+    }
+    if (!Number.isFinite(seg.start) || !Number.isFinite(seg.end)) {
+      throw new Error(`chunk ${chunk.index} : timestamps non numériques (${JSON.stringify(seg)})`);
+    }
+    if (seg.end <= seg.start) {
+      throw new Error(`chunk ${chunk.index} : end <= start (${JSON.stringify(seg)})`);
+    }
+    if (seg.start < -TIMESTAMP_TOLERANCE_S || seg.end > chunkAudioDuration + TIMESTAMP_TOLERANCE_S) {
+      throw new Error(
+        `chunk ${chunk.index} : timestamp [${seg.start}, ${seg.end}] hors des bornes attendues ` +
+          `[0, ${chunkAudioDuration}] — le provider renvoie peut-être des timestamps absolus ou dans une autre unité.`,
+      );
+    }
+  }
+}
 
 const run = promisify(execFile);
 
@@ -41,16 +78,18 @@ describe.skipIf(!canRun)('validation réelle', () => {
       const outDir = new URL('../../test-results/', import.meta.url);
       await mkdir(outDir, { recursive: true });
 
-      const { stdout } = await run('ffprobe', [
-        '-v',
-        'error',
-        '-show_entries',
-        'format=duration',
-        '-of',
-        'default=noprint_wrappers=1:nokey=1',
-        audioPath!,
-      ]);
-      const duration = Number(stdout.trim());
+      // Un webm produit en direct par MediaRecorder n'a pas de Cues/Duration dans son
+      // en-tête (`ffprobe -show_entries format=duration` renvoie N/A) : on décode le
+      // flux en entier et on lit le dernier `time=` que ffmpeg rapporte sur stderr.
+      const { stderr: decodeLog } = await run(
+        'ffmpeg',
+        ['-i', audioPath!, '-vn', '-sn', '-f', 'null', '-'],
+        { maxBuffer: 32 * 1024 * 1024 },
+      );
+      const times = [...decodeLog.matchAll(/time=(\d\d):(\d\d):(\d\d\.\d\d)/g)];
+      const lastTime = times.at(-1);
+      if (!lastTime) throw new Error(`impossible de déterminer la durée de ${audioPath}`);
+      const duration = Number(lastTime[1]) * 3600 + Number(lastTime[2]) * 60 + Number(lastTime[3]);
       expect(duration).toBeGreaterThan(0);
 
       const chunks = planChunks(duration, { chunkDuration, overlap });
@@ -91,15 +130,36 @@ describe.skipIf(!canRun)('validation réelle', () => {
       };
       const transcriptionProvider = createProvider(config);
 
+      // Chaque blob de chunk est unique (lu une seule fois depuis son propre
+      // fichier) : on peut donc retrouver l'index du chunk à partir du Blob que
+      // `transcribe` reçoit, et inspecter la réponse brute sans faire un second
+      // appel réseau.
+      const chunkIndexByBlob = new Map<Blob, number>();
+      const rawResultByChunk = new Map<number, TranscriptionResult>();
+      const inspectingProvider: TranscriptionProvider = {
+        id: transcriptionProvider.id,
+        supportsSegments: transcriptionProvider.supportsSegments,
+        supportsDiarization: transcriptionProvider.supportsDiarization,
+        testKey: () => transcriptionProvider.testKey(),
+        transcribe: async (audio, opts) => {
+          const result = await transcriptionProvider.transcribe(audio, opts);
+          const index = chunkIndexByBlob.get(audio);
+          if (index !== undefined) rawResultByChunk.set(index, result);
+          return result;
+        },
+      };
+
       const outcome = await runTranscription({
         chunks,
         loadChunk: async (chunk) => {
           const path = chunkPaths.get(chunk.index);
           if (!path) throw new Error(`chunk introuvable : ${chunk.index}`);
           const buffer = await readFile(path);
-          return new Blob([buffer], { type: 'audio/webm' });
+          const blob = new Blob([buffer], { type: 'audio/webm' });
+          chunkIndexByBlob.set(blob, chunk.index);
+          return blob;
         },
-        provider: transcriptionProvider,
+        provider: inspectingProvider,
         opts: { model: config.model, language: config.language, diarize },
         onProgress: (done, total) => {
           console.log(`[${provider}] chunk ${done}/${total}`);
@@ -108,6 +168,24 @@ describe.skipIf(!canRun)('validation réelle', () => {
 
       console.log(`transcrit: ${outcome.transcribedCount}/${chunks.length}, échecs: ${outcome.failedChunks.join(', ') || 'aucun'}`);
       expect(outcome.transcribedCount).toBeGreaterThan(0);
+
+      // Le format et les timestamps de la vraie réponse correspondent-ils à ce que
+      // `audio/merge.ts` suppose ? Un provider qui dérape ici casserait le
+      // réassemblage des chunks en silence (cf. « Limites connues » du README).
+      for (const chunk of chunks) {
+        if (outcome.failedChunks.includes(chunk.index)) continue;
+        const raw = rawResultByChunk.get(chunk.index);
+        if (!raw) throw new Error(`chunk ${chunk.index} : aucune réponse brute capturée`);
+        assertSegmentFormat(chunk, raw, transcriptionProvider.supportsSegments);
+      }
+
+      // Sanity check du réassemblage sur des données réelles : la logique de merge
+      // elle-même est déjà couverte par tests/unit/merge.test.ts et
+      // tests/unit/pipeline.test.ts avec des données synthétiques ; ceci vérifie
+      // juste qu'elle tient face à de vrais timestamps.
+      for (let i = 1; i < outcome.segments.length; i += 1) {
+        expect(outcome.segments[i]!.start).toBeGreaterThanOrEqual(outcome.segments[i - 1]!.start);
+      }
 
       const doc = {
         meta: {
