@@ -296,15 +296,15 @@ document. Écarté pour NF-08.
 
 ### 4.2 Recorders décalés
 
-Avec `chunkDuration = 300 s` et `overlap = 30 s`, le pas est `step = 270 s`. Le chunk `i` couvre
+Avec `chunkDuration = 180 s` et `overlap = 10 s`, le pas est `step = 170 s`. Le chunk `i` couvre
 `[i·step, i·step + chunkDuration]`. Deux `MediaRecorder` alternent sur le **même** `MediaStream` mixé,
 décalés de `step` :
 
 ```
-t=0      A ────────────────────────► chunk 0  [0, 300]
-t=270            B ────────────────────────► chunk 1  [270, 570]
-t=540    A ────────────────────────► chunk 2  [540, 840]
-t=810            B ...
+t=0      A ────────────────────────► chunk 0  [0, 180]
+t=170            B ────────────────────────► chunk 1  [170, 350]
+t=340    A ────────────────────────► chunk 2  [340, 520]
+t=510            B ...
 ```
 
 Au plus deux recorders actifs simultanément ; chaque `MediaRecorder` produit un webm **autonome et

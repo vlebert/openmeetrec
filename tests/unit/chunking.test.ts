@@ -8,17 +8,17 @@ import {
   planChunks,
 } from '@/audio/chunking';
 
-const OPTS = DEFAULT_CHUNK_OPTIONS; // 300 s / 30 s → step 270 s
+const OPTS = DEFAULT_CHUNK_OPTIONS; // 180 s / 10 s → step 170 s
 
 describe('chunkStep / chunkStartTime', () => {
   it('déduit le pas de la durée et du recouvrement', () => {
-    expect(chunkStep(OPTS)).toBe(270);
+    expect(chunkStep(OPTS)).toBe(170);
   });
 
   it('place les départs de chunks sur le pas', () => {
     expect(chunkStartTime(0, OPTS)).toBe(0);
-    expect(chunkStartTime(1, OPTS)).toBe(270);
-    expect(chunkStartTime(3, OPTS)).toBe(810);
+    expect(chunkStartTime(1, OPTS)).toBe(170);
+    expect(chunkStartTime(3, OPTS)).toBe(510);
   });
 
   it('rejette un index invalide', () => {
@@ -38,23 +38,25 @@ describe('planChunks', () => {
   });
 
   it('renvoie un chunk unique exactement au seuil', () => {
-    expect(planChunks(300, OPTS)).toEqual([{ index: 0, start: 0, end: 300 }]);
+    expect(planChunks(180, OPTS)).toEqual([{ index: 0, start: 0, end: 180 }]);
   });
 
   it('découpe avec recouvrement juste au-dessus du seuil', () => {
-    expect(planChunks(301, OPTS)).toEqual([
-      { index: 0, start: 0, end: 300 },
-      { index: 1, start: 270, end: 301 },
+    expect(planChunks(181, OPTS)).toEqual([
+      { index: 0, start: 0, end: 180 },
+      { index: 1, start: 170, end: 181 },
     ]);
   });
 
   it('enchaîne les chunks sur un enregistrement long', () => {
     const chunks = planChunks(1000, OPTS);
     expect(chunks).toEqual([
-      { index: 0, start: 0, end: 300 },
-      { index: 1, start: 270, end: 570 },
-      { index: 2, start: 540, end: 840 },
-      { index: 3, start: 810, end: 1000 },
+      { index: 0, start: 0, end: 180 },
+      { index: 1, start: 170, end: 350 },
+      { index: 2, start: 340, end: 520 },
+      { index: 3, start: 510, end: 690 },
+      { index: 4, start: 680, end: 860 },
+      { index: 5, start: 850, end: 1000 },
     ]);
   });
 
@@ -91,20 +93,20 @@ describe('planChunks', () => {
 
 describe('isChunkNeeded', () => {
   it('garde un dernier chunk qui apporte du contenu neuf', () => {
-    // Stop à 400 s : le chunk 1 couvre [270, 400], dont 100 s inédites.
-    expect(expectedChunkCount(400, OPTS)).toBe(2);
-    expect(isChunkNeeded(1, 400, OPTS)).toBe(true);
+    // Stop à 250 s : le chunk 1 couvre [170, 250], dont 70 s inédites.
+    expect(expectedChunkCount(250, OPTS)).toBe(2);
+    expect(isChunkNeeded(1, 250, OPTS)).toBe(true);
   });
 
   it('écarte un dernier chunk entièrement contenu dans le précédent', () => {
-    // Stop à 280 s : le recorder décalé a bien démarré à 270 s, mais son chunk
-    // [270, 280] est déjà couvert par le chunk 0.
-    expect(expectedChunkCount(280, OPTS)).toBe(1);
-    expect(isChunkNeeded(1, 280, OPTS)).toBe(false);
+    // Stop à 175 s : le recorder décalé a bien démarré à 170 s, mais son chunk
+    // [170, 175] est déjà couvert par le chunk 0.
+    expect(expectedChunkCount(175, OPTS)).toBe(1);
+    expect(isChunkNeeded(1, 175, OPTS)).toBe(false);
   });
 
   it('écarte le chunk dégénéré au moment exact du seuil', () => {
-    expect(isChunkNeeded(1, 300, OPTS)).toBe(false);
-    expect(isChunkNeeded(1, 300.5, OPTS)).toBe(true);
+    expect(isChunkNeeded(1, 180, OPTS)).toBe(false);
+    expect(isChunkNeeded(1, 180.5, OPTS)).toBe(true);
   });
 });

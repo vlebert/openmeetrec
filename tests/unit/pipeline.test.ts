@@ -21,10 +21,11 @@ describe('runTranscription', () => {
     expect(outcome.hadSegments).toBe(true);
     expect(outcome.failedChunks).toEqual([]);
     expect(outcome.segments[0]?.start).toBe(0);
-    // Le premier segment du chunk 1 commence à 270 + 20 : les deux segments
-    // situés avant le milieu de l'overlap (285 s) reviennent au chunk 0.
-    expect(outcome.segments.map((s) => s.start)).toContain(290);
-    expect(outcome.segments.map((s) => s.start)).not.toContain(270);
+    // Le chunk 1 démarre à 170 s ; son premier segment (170 s) est avant le
+    // milieu de l'overlap (175 s) et n'est donc pas retenu, contrairement au
+    // suivant (180 s).
+    expect(outcome.segments.map((s) => s.start)).toContain(180);
+    expect(outcome.segments.map((s) => s.start)).not.toContain(170);
   });
 
   it('rend des segments triés et sans doublon de frontière', async () => {
@@ -74,7 +75,7 @@ describe('runTranscription', () => {
       onProgress: (done) => progress.push(done),
     });
 
-    expect(progress).toEqual([1, 2, 3, 4]);
+    expect(progress).toEqual(CHUNKS.map((_, i) => i + 1));
   });
 
   // Garde-fou : le pipeline ne demande que les chunks qu'on lui a donnés.

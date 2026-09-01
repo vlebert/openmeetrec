@@ -76,7 +76,7 @@ function setup() {
 }
 
 describe('ChunkScheduler', () => {
-  it('produit des chunks de 5 min qui se recouvrent de 30 s', async () => {
+  it('produit des chunks de 3 min qui se recouvrent de 10 s', async () => {
     const { clock, chunks, scheduler } = setup();
     scheduler.start();
     await clock.advance(1000 * 1000);
@@ -84,10 +84,12 @@ describe('ChunkScheduler', () => {
 
     expect(total).toBe(1000);
     expect(chunks).toEqual([
-      { index: 0, start: 0, end: 300 },
-      { index: 1, start: 270, end: 570 },
-      { index: 2, start: 540, end: 840 },
-      { index: 3, start: 810, end: 1000 },
+      { index: 0, start: 0, end: 180 },
+      { index: 1, start: 170, end: 350 },
+      { index: 2, start: 340, end: 520 },
+      { index: 3, start: 510, end: 690 },
+      { index: 4, start: 680, end: 860 },
+      { index: 5, start: 850, end: 1000 },
     ]);
   });
 
@@ -101,15 +103,15 @@ describe('ChunkScheduler', () => {
     expect(live.count).toBe(0);
   });
 
-  // Le stop tombe dans la zone d'overlap : le chunk [270, 280] est entièrement
+  // Le stop tombe dans la zone d'overlap : le chunk [170, 175] est entièrement
   // contenu dans le premier, le transcrire ne ferait que des doublons.
   it('écarte le dernier chunk quand il est déjà couvert par le précédent', async () => {
     const { clock, chunks, scheduler } = setup();
     scheduler.start();
-    await clock.advance(280 * 1000);
+    await clock.advance(175 * 1000);
     await scheduler.stop();
 
-    expect(chunks).toEqual([{ index: 0, start: 0, end: 280 }]);
+    expect(chunks).toEqual([{ index: 0, start: 0, end: 175 }]);
   });
 
   it('libère tous les recorders même si le stop arrive avant le premier chunk', async () => {

@@ -16,10 +16,10 @@ Extension de navigateur **open source et auditable** qui enregistre l'audio d'un
 
 - Extension Chromium (MV3). Firefox hors scope, architecture extensible.
 - Capture : **micro** (`getUserMedia`) + **onglet de visio** (`chrome.tabCapture`), mélangés en un flux mono.
-- Chunking 5 min + overlap 30 s **produit pendant l'enregistrement**, transcription parallèle, merge par segments.
+- Chunking 3 min + overlap 10 s **produit pendant l'enregistrement**, transcription parallèle, merge par segments.
 - Transcription via **Mistral Voxtral** (diarization en option) ou **OpenAI Whisper** (pas de diarization).
 - Menu déroulant de modèles connus + endpoint/modèle custom.
-- Export **Markdown** téléchargé : frontmatter (modèle, date, durée, plateforme, speakers) + transcription en blockquote.
+- Export **Markdown** téléchargé : frontmatter (modèle, date, durée, plateforme, speakers) + transcription en markdown simple.
 - Option : télécharger aussi le fichier **audio** `.webm` (ou seulement le markdown).
 - Paramètres : choix du provider/modèle + clés API (+ test de clé).
 - **Popup** de contrôle sur l'onglet de visio + page de progression/résultat.
@@ -71,7 +71,7 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 |---|---|
 | F-AUD-01 | Sortie audio uniquement (webm/opus via MediaRecorder) |
 | F-AUD-02 | Format brut envoyé tel quel aux API ; resampling 16 kHz mono seulement si une API le réclame |
-| F-AUD-03 | Chunks de 5 min avec overlap 30 s, **produits pendant l'enregistrement** (mémoire bornée, indépendante de la durée) |
+| F-AUD-03 | Chunks de 3 min avec overlap 10 s, **produits pendant l'enregistrement** (mémoire bornée, indépendante de la durée) |
 | F-AUD-04 | Chunks persistés en OPFS au fil de l'eau ; aucun décodage de l'enregistrement complet en mémoire |
 | F-AUD-05 | Transcription parallèle des chunks (concurrence limitée) |
 | F-AUD-06 | Merge par segments avec coupe au milieu de la zone d'overlap |
@@ -155,7 +155,7 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 
 - [ ] Record micro+onglet sur Chrome, sur Meet et une autre plateforme web, **sans perdre le son de la visio**.
 - [ ] `.webm/opus` produit, audio intelligible.
-- [ ] Chunking + merge → transcription cohérente sur un audio > 5 min, **sans texte dupliqué aux frontières**.
+- [ ] Chunking + merge → transcription cohérente sur un audio > 3 min, **sans texte dupliqué aux frontières**.
 - [ ] Transcription Mistral avec diarization → markdown structuré par speaker.
 - [ ] Transcription OpenAI → markdown plat.
 - [ ] Téléchargement markdown (+ audio si option activée).

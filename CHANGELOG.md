@@ -6,6 +6,11 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Modifié
+
+- Chunking par défaut : 3 min / overlap 10 s (au lieu de 5 min / 30 s) — des chunks plus courts,
+  plus réactifs à transcrire au fil de l'enregistrement.
+
 ## [0.4.0] - 2026-09-01
 
 ### Ajouté

@@ -13,8 +13,8 @@
 import type { ChunkInfo, ChunkOptions } from '@/shared/types';
 
 export const DEFAULT_CHUNK_OPTIONS: ChunkOptions = {
-  chunkDuration: 300,
-  overlap: 30,
+  chunkDuration: 180,
+  overlap: 10,
 };
 
 export function assertValidChunkOptions(opts: ChunkOptions): void {
