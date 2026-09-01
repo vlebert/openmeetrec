@@ -1,109 +1,108 @@
 # OpenMeetRec
 
-Extension de navigateur **open source et privacy-first** pour enregistrer l'audio des visioconférences web (micro + participants distants), sur **n'importe quelle plateforme de visio**, puis le transcrire via l'API de votre choix (Mistral Voxtral ou OpenAI Whisper) et l'exporter en Markdown.
+An open source, privacy-first browser extension that records the audio of your web
+meetings, your microphone and every remote participant, on any video conferencing
+platform, then transcribes it with the speech API of your choice (Mistral Voxtral or
+OpenAI Whisper) and exports the result as Markdown.
 
-Pas de bot dans la réunion, pas de service cloud imposé, aucun envoi réseau que vous n'ayez déclenché.
+No bot joining the call, no mandatory cloud service, no network request you didn't
+trigger yourself.
 
-> Nom de travail — peut être renommé à tout moment. Le dépôt est indépendant du nom.
+> Working name. The project may be renamed at any point; the repository isn't tied to it.
 
-- **PRD** : [`docs/PRD.md`](docs/PRD.md)
-- **Architecture** : [`docs/architecture.md`](docs/architecture.md)
-- **Audit des permissions** : [`docs/permissions-audit.md`](docs/permissions-audit.md)
+## Why
 
-## État
+There's no shortage of meeting recorders and transcription bots, but most of them are
+tied to one specific video conferencing tool, join the call as a visible participant, or
+route your audio through someone else's cloud. There wasn't a simple, open source option
+that just works wherever you already are: OpenMeetRec captures the tab audio directly, so
+it works with any video conferencing tool as long as you're using it in Chrome.
 
-🟡 En cours de développement. MVP **Chromium uniquement** ; Firefox est hors scope, avec un point
-d'extension prévu dans l'architecture.
+It's also deliberately scoped to transcription only, no automatic summary. In my
+experience, a transcript turned straight into a summary without context (the project
+brief, the notes from a previous meeting) comes out shallower than one written with that
+context in hand. So this extension focuses on getting a clean transcript, live and right
+after the meeting ends, and leaves what you do with it to you and whatever tool you
+already use for that.
 
-Fait :
+## How it works
 
-- PRD et architecture (v0.3), audit des permissions.
-- Scaffolding : TypeScript strict, Vite, manifest MV3, build.
-- Logique pure testée : planification des chunks, merge des segments, config, presets de providers,
-  backoff, sémaphore, format markdown, provider mock.
-- Chaîne de capture : popup → service worker → offscreen document, mix micro + onglet avec
-  ré-injection du son, chunks écrits en OPFS pendant l'enregistrement.
-- Test d'intégration : session complète dans Chromium (enregistrement → chunks → faux endpoint
-  → merge → markdown téléchargé), `npm run test:e2e`.
-- Transcription : providers Mistral / OpenAI / custom, pipeline chunks → merge → export Markdown,
-  téléchargement en fin de session.
-- UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options), en anglais.
-- Badge « REC » sur l'icône de la barre d'outils pendant l'enregistrement : reste visible même si
-  le popup s'est refermé (changement d'onglet, clic ailleurs).
-- Logo et icônes de l'extension (16/32/48/128). Le point central du logo est rouge pendant
-  l'enregistrement et gris au repos : l'icône porte l'état, en plus du badge « REC ».
+- Click the extension icon to start recording; a red dot on the icon and a "REC" badge
+  show it's running, even after you close the popup.
+- Audio is mixed from your microphone and the tab (remote participants) and chunked
+  locally while recording, so memory use doesn't grow with meeting length.
+- When you stop, each chunk is sent to the transcription provider you configured, then
+  merged and exported as a Markdown file, with no server in between beyond the API you
+  chose.
+- No video conferencing host permissions are requested: capture relies on `activeTab`,
+  granted only for the tab you clicked the icon on. See
+  [`docs/permissions-audit.md`](docs/permissions-audit.md) for the full breakdown of
+  every permission the extension asks for and why.
 
-À venir :
+## Status
 
-- Page de session (`ui/record.html`) : suivi détaillé hors popup.
-- Conversion 16 kHz mono en repli si une API refuse le webm/opus brut.
-- Outillage de validation manuelle contre une vraie API en place (`npm run test:real-api`), mais
-  jamais encore exécuté pour de vrai contre Mistral/OpenAI, ni sur une vraie visio.
+MVP, Chromium only. Firefox is out of scope for now, though the capture layer is built
+behind an interface so it can be added without rewriting the rest. See
+[`CHANGELOG.md`](CHANGELOG.md) for what's shipped so far.
 
-## Limites connues
+Known limitations:
 
-- **Jamais confronté à une vraie API ni à une vraie visio.** Une session complète tourne dans
-  Chromium contre un faux endpoint local, mais la forme réelle des réponses Mistral/OpenAI n'a
-  jamais été vue, et aucune visioconférence réelle n'a été enregistrée.
-- **`chrome.tabCapture` n'est pas couvert par les tests.** Le grant `activeTab` n'existe que si
-  l'utilisateur invoque lui-même l'extension ; aucune automatisation ne peut l'obtenir. Le test
-  d'intégration substitue la stratégie de capture et couvre tout ce qui vient après.
-- Les identifiants de locuteurs sont attribués chunk par chunk et ne sont pas rapprochés entre
-  chunks ; le markdown exporté le signale, et une section « Chunk N » sépare visuellement le texte
-  de chaque chunk pour rendre ce reset repérable.
-- **Les timestamps renvoyés par le provider sont repris tels quels.** Un provider qui daterait un
-  segment hors des bornes de son propre chunk produirait un transcript incohérent, sans
-  avertissement. Constaté en test avec un faux endpoint mal réglé ; reste à décider s'il faut
-  écarter ou borner ces segments.
+- Not yet validated against a real transcription API or a real video call end to end,
+  only against a local mock endpoint in Chromium.
+- Speaker labels are assigned per chunk and aren't reconciled across chunks; the
+  exported Markdown flags this with a visible "Chunk N" break.
+- Timestamps are taken as returned by the provider; a provider returning a timestamp
+  outside its own chunk's bounds would produce an inconsistent transcript.
 
-## Développement
+## Development
 
 ```bash
 npm install
-npm test          # unitaires (Vitest) — logique pure, sans navigateur
+npm test          # unit tests (Vitest) — pure logic, no browser
 npm run typecheck
-npm run build     # produit dist/, chargeable via chrome://extensions (mode développeur)
-npm run test:e2e  # intégration : session complète dans Chromium (~1 min)
+npm run build     # outputs dist/, loadable via chrome://extensions (developer mode)
+npm run test:e2e  # integration: full session in Chromium (~1 min)
 ```
 
-Le build écrit une extension unpacked dans `dist/` : activez le mode développeur dans
-`chrome://extensions`, puis « Charger l'extension non empaquetée » et pointez sur `dist/`.
+The build writes an unpacked extension to `dist/`: enable developer mode in
+`chrome://extensions`, then "Load unpacked" and point it at `dist/`.
 
-### Lancer les tests d'intégration
+### Running the integration tests
 
-Ils ont besoin d'un display X (headful) et d'un Chromium. Sur une machine sans écran, un serveur
-VNC suffit — inutile d'installer xvfb :
+They need an X display (headful) and Chromium. On a headless machine, a VNC server is
+enough, no need for xvfb:
 
 ```bash
 DISPLAY=:1 npm run test:e2e
 ```
 
-Playwright télécharge normalement son propre Chromium (`npx playwright install chromium`). Si un
-build est déjà présent sur la machine avec une révision différente de celle qu'attend Playwright,
-pointez dessus plutôt que de retélécharger :
+Playwright normally downloads its own Chromium (`npx playwright install chromium`). If a
+build is already present on the machine at a different revision than the one Playwright
+expects, point at it instead of re-downloading:
 
 ```bash
 OMR_CHROMIUM=~/.cache/ms-playwright/chromium-1232/chrome-linux64/chrome DISPLAY=:1 npm run test:e2e
 ```
 
-### Valider avec une vraie API (manuel, hors CI)
+### Validating against a real API (manual, outside CI)
 
-`npm test` et `npm run test:e2e` n'appellent jamais de vraie API (règle du projet : provider mock
-obligatoire en CI). Pour vérifier de temps en temps que le pipeline tient face à une vraie réponse
-Mistral/OpenAI — sans payer à chaque `git push` — il y a un troisième test, à part et manuel :
-`tests/manual/real-api.manual.ts`, lancé uniquement via `npm run test:real-api`.
+`npm test` and `npm run test:e2e` never call a real API: the project rule is a mock
+provider in CI, always. To occasionally check the pipeline against a real Mistral/OpenAI
+response, without paying on every `git push`, there's a separate manual script:
+`tests/manual/real-api.manual.ts`, run only via `npm run test:real-api`.
 
-Il découpe un vrai fichier audio (assez long pour produire plusieurs chunks) avec `ffmpeg`, envoie
-chaque chunk au provider choisi, puis écrit le markdown obtenu dans `test-results/` (ignoré par git)
-pour relecture. Rien n'est commité, rien n'est loggé — la clé API ne sert qu'à l'en-tête HTTP.
+It splits a real audio file (long enough to produce several chunks) with `ffmpeg`, sends
+each chunk to the provider you pick, then writes the resulting Markdown to
+`test-results/` (git-ignored) for review. Nothing is committed, nothing is logged; the
+API key is only ever used in the HTTP header.
 
-Config par variables d'environnement, à garder hors du dépôt (ex. un fichier source dans le home,
-jamais dans le projet) :
+Configure it with environment variables kept out of the repo (e.g. a file in your home
+directory, never in the project):
 
 ```bash
-# ~/.config/openmeetrec/test.env — jamais dans le dépôt
-export OMR_TEST_AUDIO=~/somewhere/long-recording.webm   # quelques minutes, plusieurs chunks
-export MISTRAL_API_KEY=...                               # ou OPENAI_API_KEY selon le provider
+# ~/.config/openmeetrec/test.env — never in the repo
+export OMR_TEST_AUDIO=~/somewhere/long-recording.webm   # a few minutes, several chunks
+export MISTRAL_API_KEY=...                               # or OPENAI_API_KEY, depending on provider
 ```
 
 ```bash
@@ -112,33 +111,29 @@ OMR_TEST_PROVIDER=mistral npm run test:real-api
 OMR_TEST_PROVIDER=openai npm run test:real-api
 ```
 
-Variables optionnelles : `OMR_TEST_MODEL`, `OMR_TEST_DIARIZE=1`, `OMR_TEST_CHUNK_DURATION` /
-`OMR_TEST_OVERLAP` (secondes — utile pour forcer plusieurs chunks sur un fichier plus court sans
-changer les valeurs par défaut du produit), `OMR_TEST_ENDPOINT` (provider `custom`).
+Optional variables: `OMR_TEST_MODEL`, `OMR_TEST_DIARIZE=1`, `OMR_TEST_CHUNK_DURATION` /
+`OMR_TEST_OVERLAP` (seconds, useful to force multiple chunks on a shorter file without
+changing the product's own defaults), `OMR_TEST_ENDPOINT` (for the `custom` provider).
 
-## Choix structurants
+## Design choices
 
-- **La logique fragile est pure.** Chunking, merge, config, format et politique de retry n'importent
-  ni `chrome` ni le DOM : ils sont couverts par des tests unitaires qui tournent en millisecondes.
-- **La capture est abstraite** derrière `CaptureStrategy`, ce qui laisse la place à Firefox sans
-  réécrire le reste.
-- **Les chunks sont produits pendant l'enregistrement**, pas après : l'empreinte mémoire ne dépend pas
-  de la durée de la réunion.
-- **Les segments horodatés sont toujours demandés**, indépendamment de la diarization : c'est ce qui
-  permet de supprimer le texte dupliqué aux frontières de chunks sans passe LLM.
+- Chunking, merging, config, formatting, and retry policy import neither `chrome` nor
+  the DOM, so the fragile logic is covered by unit tests that run in milliseconds.
+- Capture is abstracted behind a `CaptureStrategy` interface, leaving room for a Firefox
+  implementation later without touching the rest of the pipeline.
+- Chunks are produced while recording, not afterwards, so memory use doesn't depend on
+  meeting length.
+- Timestamped segments are always requested, regardless of diarization; that's what
+  makes it possible to drop duplicated text at chunk boundaries without an extra LLM
+  pass.
 
-## Origine du projet
+## Credits
 
-Synthèse de plusieurs recherches :
+The chunking/merge pipeline design is inspired by a Python project of mine called
+`supervoxtral`, ported to TypeScript. Unlike supervoxtral, this project stops at
+transcription and doesn't include a second, LLM-driven summarization step; that's
+intentionally left to whatever tool you use downstream.
 
-- Le terrain « extension OSS auditable, cross-browser, avec pipeline LLM local optionnel » est
-  largement vacant.
-- La logique de pipeline (chunking, merge) s'inspire du projet Python
-  [`supervoxtral`](../../py/supervoxtral) et est portée en TS. NB : supervoxtral fait aussi une 2e
-  étape LLM (transformation) qui est hors scope MVP ici — transcription seule.
-- La capture audio devra fonctionner sur Chromium **et** Firefox à terme, ce qui impose deux
-  stratégies de capture (`tabCapture` côté Chromium, interception WebRTC en MAIN world côté Firefox).
-
-## Licence
+## License
 
 MIT.
