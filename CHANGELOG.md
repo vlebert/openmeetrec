@@ -6,11 +6,60 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Modifié
+
+- Chunking par défaut : 3 min / overlap 10 s (au lieu de 5 min / 30 s) — des chunks plus courts,
+  plus réactifs à transcrire au fil de l'enregistrement.
+- `npm run test:real-api` : détection de la durée de l'audio robuste aux fichiers webm de
+  MediaRecorder sans Cues/Duration dans l'en-tête (décodage complet au lieu de lire les métadonnées
+  du conteneur). Vérifie aussi que les timestamps renvoyés par le provider tombent bien dans les
+  bornes du chunk transcrit, au lieu de supposer silencieusement leur unité et leur référentiel.
+  Validé pour de vrai contre Mistral (diarization) et OpenAI.
+
+## [0.4.0] - 2026-09-01
+
 ### Ajouté
 
+- Rappel d'enregistrement : à l'ouverture d'une page reconnue comme une visioconférence, une
+  notification système rappelle de lancer la capture. Rien n'est enregistré automatiquement — le
+  départ reste un clic sur l'icône de l'extension, seul geste qui accorde l'autorisation de
+  capturer l'onglet.
+- Réglages « Meeting reminder » : la liste des URLs de visio (Meet, Teams, Zoom, Jitsi, Whereby,
+  Webex…) est pré-remplie et entièrement éditable — une ligne par motif, `*` comme joker. Retirer
+  une ligne suffit à ne plus être rappelé sur ce site ; l'option se désactive en entier par une
+  case à cocher.
+
+### Modifié
+
+- Nouvelles permissions `tabs` et `notifications`, requises par le rappel ci-dessus : `tabs` parce
+  que Chrome retire l'URL des onglets sans elle, `notifications` pour afficher le rappel. Les URLs
+  sont comparées aux motifs puis jetées — jamais stockées ni envoyées. Voir
+  `docs/permissions-audit.md`.
+
+## [0.3.0] - 2026-08-30
+
+### Ajouté
+
+- Bouton « Retry transcription » dans le popup : après un échec (réseau, clé, overload API), les
+  chunks restent en OPFS et le pipeline complet peut être relancé sur la même session, sans
+  réenregistrer.
 - `npm run test:real-api` : validation manuelle du pipeline contre une vraie API (Mistral/OpenAI),
   hors CI et hors `npm test` — découpe un fichier audio réel en chunks via `ffmpeg`, clé API et
   fichier audio fournis par variables d'environnement, jamais commités.
+
+### Modifié
+
+- Transcription diarizée : les segments consécutifs d'un même speaker sont désormais regroupés en
+  un seul paragraphe (un tour de parole), au lieu d'un paragraphe par segment brut renvoyé par
+  l'API (~10s). Le regroupement s'arrête à chaque frontière de chunk, car les identifiants de
+  speaker ne sont pas appariés d'un chunk à l'autre.
+
+### Corrigé
+
+- `downloadAndWait` restait bloqué indéfiniment quand le fichier téléchargé était minuscule (ex.
+  transcription totalement échouée) : le téléchargement se terminait parfois avant que le listener
+  `chrome.downloads.onChanged` ne soit posé. L'état courant du téléchargement est maintenant vérifié
+  en plus des évènements futurs.
 
 ## [0.2.0] - 2026-08-29
 

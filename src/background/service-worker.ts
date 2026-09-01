@@ -12,6 +12,7 @@
 import { detectStrategyId } from '@/capture/detect';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { loadConfig } from '@/config/storage';
+import { clearMeetingReminder, registerMeetingReminder } from '@/background/meetingReminder';
 import { absoluteIcon, IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
 import {
   IDLE_STATE,
@@ -73,6 +74,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   })();
 });
 
+registerMeetingReminder({
+  isSessionActive: async () => {
+    const { status } = await readState();
+    return status === 'recording' || status === 'processing';
+  },
+});
+
 async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
   switch (message.type) {
     case 'GET_STATE':
@@ -81,6 +89,8 @@ async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
       return startRecording(message);
     case 'STOP_RECORDING':
       return stopRecording();
+    case 'RETRY_PIPELINE':
+      return retryPipeline();
     case 'RESET':
       await writeState(IDLE_STATE);
       return { ok: true };
@@ -148,6 +158,7 @@ async function startRecording(
     return { ok: false, error: sessionError };
   }
 
+  await clearMeetingReminder(message.tabId);
   await writeState({
     ...IDLE_STATE,
     status: 'recording',
@@ -170,6 +181,24 @@ async function stopRecording(): Promise<Ack> {
     // Offscreen déjà disparu : plus rien ne viendra, on fige la session.
     await writeState({ ...(await readState()), status: 'done' });
   }
+  return { ok: true };
+}
+
+/**
+ * Reprend une session en échec (F-CAP-08 côté résilience) : les chunks sont
+ * déjà en OPFS, il suffit de relancer le pipeline sur le même `sessionId`.
+ * Relance *tous* les chunks de la session, pas seulement ceux en échec — le
+ * pipeline ne garde pas de résultats partiels d'un appel à l'autre.
+ */
+async function retryPipeline(): Promise<Ack> {
+  const state = await readState();
+  const retryable = state.status === 'error' || (state.status === 'done' && state.error !== null);
+  if (!retryable || state.sessionId === null) {
+    return { ok: false, error: { code: 'internal', message: 'nothing to retry' } };
+  }
+  await writeState({ ...state, status: 'processing', error: null, progress: null });
+  await ensureOffscreen();
+  await transcribeAndExport();
   return { ok: true };
 }
 
@@ -245,14 +274,25 @@ async function transcribeAndExport(): Promise<void> {
 async function downloadAndWait(request: DownloadRequest): Promise<string> {
   const id = await chrome.downloads.download({ url: request.url, filename: request.filename, saveAs: false });
   await new Promise<void>((resolve) => {
-    const listener = (delta: chrome.downloads.DownloadDelta): void => {
-      if (delta.id !== id || !delta.state) return;
-      const done = delta.state.current === 'complete' || delta.state.current === 'interrupted';
-      if (!done) return;
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
       chrome.downloads.onChanged.removeListener(listener);
       resolve();
     };
+    const listener = (delta: chrome.downloads.DownloadDelta): void => {
+      if (delta.id !== id || !delta.state) return;
+      const done = delta.state.current === 'complete' || delta.state.current === 'interrupted';
+      if (done) finish();
+    };
     chrome.downloads.onChanged.addListener(listener);
+    // Un téléchargement minuscule (ex. un markdown vide, chunks tous en échec)
+    // peut déjà être terminé avant que le listener ne soit posé : sans ce
+    // rattrapage, on attendrait indéfiniment un évènement déjà passé.
+    void chrome.downloads.search({ id }).then(([existing]) => {
+      if (existing && (existing.state === 'complete' || existing.state === 'interrupted')) finish();
+    });
   });
   return request.filename;
 }

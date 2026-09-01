@@ -21,6 +21,7 @@ const el = {
   micEnabled: byId<HTMLInputElement>('mic-enabled'),
   toggle: byId<HTMLButtonElement>('toggle'),
   error: byId<HTMLParagraphElement>('error'),
+  retry: byId<HTMLButtonElement>('retry'),
   grantMic: byId<HTMLButtonElement>('grant-mic'),
   platform: byId<HTMLElement>('platform'),
   options: byId<HTMLAnchorElement>('options'),
@@ -34,6 +35,7 @@ el.toggle.addEventListener('click', () => void onToggle());
 el.grantMic.addEventListener('click', () => {
   void chrome.tabs.create({ url: chrome.runtime.getURL('ui/mic-permission.html') });
 });
+el.retry.addEventListener('click', () => void onRetry());
 el.options.addEventListener('click', (event) => {
   event.preventDefault();
   chrome.runtime.openOptionsPage();
@@ -58,7 +60,14 @@ async function onToggle(): Promise<void> {
     ? { target: 'sw', type: 'STOP_RECORDING' }
     : { target: 'sw', type: 'START_RECORDING', tabId: tabId ?? -1, url: tabUrl, micEnabled: el.micEnabled.checked };
   const ack = (await chrome.runtime.sendMessage(message)) as Ack;
-  if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission');
+  if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission', false);
+  await refresh();
+}
+
+async function onRetry(): Promise<void> {
+  el.retry.disabled = true;
+  await chrome.runtime.sendMessage({ target: 'sw', type: 'RETRY_PIPELINE' } satisfies ToWorkerMessage);
+  el.retry.disabled = false;
   await refresh();
 }
 
@@ -96,8 +105,11 @@ function render(): void {
   el.micOption.hidden = recording || busy;
   el.micEnabled.disabled = recording || busy;
 
-  if (current.error) showError(current.error.message, current.error.code === 'mic-permission');
-  else hideError();
+  if (current.error) {
+    showError(current.error.message, current.error.code === 'mic-permission', current.sessionId !== null);
+  } else {
+    hideError();
+  }
 
   if (recording && current.startedAt !== null) {
     el.timer.textContent = formatTimestamp((Date.now() - current.startedAt) / 1000);
@@ -124,15 +136,17 @@ function statusLabel(current: SessionState): string {
   }
 }
 
-function showError(message: string, micPermission: boolean): void {
+function showError(message: string, micPermission: boolean, canRetry: boolean): void {
   el.error.hidden = false;
   el.error.textContent = message;
   el.grantMic.hidden = !micPermission;
+  el.retry.hidden = !canRetry;
 }
 
 function hideError(): void {
   el.error.hidden = true;
   el.grantMic.hidden = true;
+  el.retry.hidden = true;
 }
 
 function hostOf(url: string): string {

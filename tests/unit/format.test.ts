@@ -93,7 +93,7 @@ describe('buildBody', () => {
     expect(body).toBe('Bonjour tout le monde.');
   });
 
-  it('rend un paragraphe par segment avec diarization', () => {
+  it('rend un paragraphe par tour de parole avec diarization', () => {
     const body = buildBody(
       doc({
         diarized: true,
@@ -104,6 +104,22 @@ describe('buildBody', () => {
       }),
     );
     expect(body).toBe(['**Speaker 0** (00:00:12): Bonjour.', '', '**Speaker 1** (00:00:45): Salut.'].join('\n'));
+  });
+
+  it('fusionne les segments consécutifs du même speaker en un seul paragraphe', () => {
+    const body = buildBody(
+      doc({
+        diarized: true,
+        segments: [
+          { text: 'Bonjour,', start: 12, end: 13, speakerId: '0' },
+          { text: 'comment ça va ?', start: 13, end: 15, speakerId: '0' },
+          { text: 'Bien merci.', start: 15, end: 17, speakerId: '1' },
+        ],
+      }),
+    );
+    expect(body).toBe(
+      ['**Speaker 0** (00:00:12): Bonjour, comment ça va ?', '', '**Speaker 1** (00:00:15): Bien merci.'].join('\n'),
+    );
   });
 
   it('recompose le texte depuis les segments quand la diarization est off', () => {

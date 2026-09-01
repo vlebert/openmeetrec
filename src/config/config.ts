@@ -4,6 +4,7 @@
  */
 
 import type { Config, ProviderId } from '@/shared/types';
+import { DEFAULT_MEETING_PATTERNS, normalizeMeetingPatterns } from '@/meetings/patterns';
 import { getProviderPreset, PROVIDER_PRESETS } from '@/providers/registry';
 
 export const DEFAULT_CONFIG: Config = {
@@ -13,6 +14,8 @@ export const DEFAULT_CONFIG: Config = {
   diarize: true,
   downloadAudio: false,
   language: null,
+  meetingReminder: true,
+  meetingPatterns: [...DEFAULT_MEETING_PATTERNS],
 };
 
 const PROVIDER_IDS = PROVIDER_PRESETS.map((p) => p.id);
@@ -62,6 +65,12 @@ export function normalizeConfig(stored: unknown): Config {
     diarize: asBoolean(raw['diarize'], DEFAULT_CONFIG.diarize),
     downloadAudio: asBoolean(raw['downloadAudio'], DEFAULT_CONFIG.downloadAudio),
     language: asString(raw['language']) ?? null,
+    meetingReminder: asBoolean(raw['meetingReminder'], DEFAULT_CONFIG.meetingReminder),
+    // Une liste présente fait foi, même vide : c'est l'utilisateur qui a tout
+    // retiré. Les défauts ne servent qu'à amorcer une config qui n'en a pas.
+    meetingPatterns: Array.isArray(raw['meetingPatterns'])
+      ? normalizeMeetingPatterns(raw['meetingPatterns'])
+      : [...DEFAULT_MEETING_PATTERNS],
   };
 
   const customEndpoint = asString(raw['customEndpoint']);

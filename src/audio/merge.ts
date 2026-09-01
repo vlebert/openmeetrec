@@ -111,3 +111,60 @@ export function countSpeakers(segments: readonly Segment[]): number {
   }
   return ids.size;
 }
+
+/** Tour de parole consolidé : segments consécutifs d'un même speaker regroupés en un seul texte. */
+export interface SpeakerTurn {
+  speakerId: string | undefined;
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Regroupe les segments consécutifs d'un même speaker en tours de parole
+ * (port de `format_diarized_transcript`, supervoxtral svx/core/formatting.py).
+ *
+ * `chunkBoundaries` (cf. `chunkBoundaries` ci-dessus) empêche de fusionner deux
+ * segments situés de part et d'autre d'une frontière de chunk : les speaker IDs
+ * sont attribués indépendamment par chunk, donc "Speaker 0" avant et après une
+ * frontière ne sont pas garantis être la même personne (cf. avertissement dans
+ * `shared/format.ts`). Une frontière force donc un nouveau tour même si le
+ * speakerId est identique.
+ */
+export function groupSegmentsBySpeaker(
+  segments: readonly Segment[],
+  chunkBoundaries: readonly number[] = [],
+): SpeakerTurn[] {
+  interface OpenTurn {
+    speakerId: string | undefined;
+    start: number;
+    end: number;
+    texts: string[];
+    chunkIndex: number;
+  }
+
+  const turns: OpenTurn[] = [];
+  let chunkIndex = 0;
+
+  for (const seg of segments) {
+    while (chunkIndex < chunkBoundaries.length && seg.start >= chunkBoundaries[chunkIndex]!) {
+      chunkIndex += 1;
+    }
+
+    const current = turns[turns.length - 1];
+    const text = seg.text.trim();
+    if (current && current.speakerId === seg.speakerId && current.chunkIndex === chunkIndex) {
+      current.end = seg.end;
+      if (text.length > 0) current.texts.push(text);
+    } else {
+      turns.push({ speakerId: seg.speakerId, start: seg.start, end: seg.end, texts: text ? [text] : [], chunkIndex });
+    }
+  }
+
+  return turns.map(({ speakerId, start, end, texts }) => ({
+    speakerId,
+    start,
+    end,
+    text: texts.join(' '),
+  }));
+}

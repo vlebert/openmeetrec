@@ -56,6 +56,10 @@ export interface Config {
   downloadAudio: boolean;
   /** `null` = détection automatique de la langue. */
   language: string | null;
+  /** Notifier à l'ouverture d'une page reconnue comme une visio. */
+  meetingReminder: boolean;
+  /** Motifs d'URL des pages de visio, format `hôte/chemin` avec `*` (voir `meetings/patterns`). */
+  meetingPatterns: string[];
 }
 
 /** Métadonnées d'une session, pour le frontmatter de l'export. */

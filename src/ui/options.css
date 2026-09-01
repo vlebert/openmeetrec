@@ -6,7 +6,9 @@ fieldset { border: 1px solid rgba(127,127,127,0.35); border-radius: 6px; margin:
 legend { padding: 0 4px; font-weight: 600; }
 label { display: block; margin-top: 10px; font-size: 13px; }
 label.check { display: flex; align-items: center; gap: 6px; }
-input[type="text"], input[type="password"], input[type="url"], select { width: 100%; box-sizing: border-box; padding: 6px; font: inherit; margin-top: 2px; }
+input[type="text"], input[type="password"], input[type="url"], select, textarea { width: 100%; box-sizing: border-box; padding: 6px; font: inherit; margin-top: 2px; }
+textarea { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+code { font-size: 11px; }
 input[size] { width: auto; }
 button { padding: 6px 12px; font: inherit; cursor: pointer; margin-top: 10px; }
 .hint { margin: 4px 0 0; font-size: 12px; opacity: 0.7; }

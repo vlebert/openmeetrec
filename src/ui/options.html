@@ -48,6 +48,25 @@
         <p class="hint">ISO code (en, fr…); empty = automatic detection.</p>
       </fieldset>
 
+      <fieldset>
+        <legend>Meeting reminder</legend>
+        <label class="check">
+          <input type="checkbox" id="meeting-reminder" /> Remind me when I open a meeting page
+        </label>
+        <p class="hint">
+          A system notification appears so you do not forget to start the recording. Nothing is
+          ever recorded automatically: starting still takes a click on the extension icon.
+        </p>
+
+        <label for="meeting-patterns">Meeting URLs, one pattern per line</label>
+        <textarea id="meeting-patterns" rows="8" spellcheck="false" autocomplete="off"></textarea>
+        <p class="hint">
+          Host and path, <code>*</code> as a wildcard — <code>meet.google.com/*</code>,
+          <code>*.zoom.us/j/*</code>. Delete a line to stop being reminded on that site.
+        </p>
+        <button id="reset-patterns" type="button">Restore the default list</button>
+      </fieldset>
+
       <div class="actions">
         <button id="save" type="button">Save</button>
         <span id="status" class="hint"></span>

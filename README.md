@@ -29,30 +29,46 @@ already use for that.
 
 - Click the extension icon to start recording; a red dot on the icon and a "REC" badge
   show it's running, even after you close the popup.
+- Open a page OpenMeetRec recognizes as a meeting (Meet, Teams, Zoom, Jitsi, Whereby,
+  Webex...) and it reminds you with a system notification to hit record. Nothing starts
+  automatically, and the URL list is fully editable in settings.
 - Audio is mixed from your microphone and the tab (remote participants) and chunked
   locally while recording, so memory use doesn't grow with meeting length.
-- When you stop, each chunk is sent to the transcription provider you configured, then
-  merged and exported as a Markdown file, with no server in between beyond the API you
-  chose.
+- Each chunk is sent to the transcription provider you configured as the meeting goes.
+  If a chunk fails (network blip, rate limit), a retry button reruns the pipeline on the
+  same session afterwards, no need to record again.
+- Diarized transcripts group consecutive segments from the same speaker into a single
+  paragraph per turn, instead of one paragraph per raw ~10 second API segment.
+- Once merged, the transcript is exported as a Markdown file, with no server in between
+  beyond the API you chose.
 - No video conferencing host permissions are requested: capture relies on `activeTab`,
-  granted only for the tab you clicked the icon on. See
+  granted only for the tab you clicked the icon on; the meeting reminder needs `tabs` to
+  read that tab's URL (compared against your patterns, then discarded) and
+  `notifications` to show the reminder. See
   [`docs/permissions-audit.md`](docs/permissions-audit.md) for the full breakdown of
   every permission the extension asks for and why.
 
 ## Status
 
 MVP, Chromium only. Firefox is out of scope for now, though the capture layer is built
-behind an interface so it can be added without rewriting the rest. See
-[`CHANGELOG.md`](CHANGELOG.md) for what's shipped so far.
+behind an interface so it can be added without rewriting the rest.
+
+Tested end to end: real meetings recorded start to finish, and the transcription
+pipeline checked against the real Mistral (with diarization) and OpenAI APIs, not just
+the mock endpoint used in CI. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped so
+far.
 
 Known limitations:
 
-- Not yet validated against a real transcription API or a real video call end to end,
-  only against a local mock endpoint in Chromium.
+- `chrome.tabCapture` isn't covered by automated tests: the `activeTab` grant only
+  exists when a user clicks the extension themselves, so no automation can obtain it.
+  The integration test substitutes the capture strategy and covers everything
+  downstream.
 - Speaker labels are assigned per chunk and aren't reconciled across chunks; the
   exported Markdown flags this with a visible "Chunk N" break.
-- Timestamps are taken as returned by the provider; a provider returning a timestamp
-  outside its own chunk's bounds would produce an inconsistent transcript.
+- Timestamps are taken as returned by the provider. `npm run test:real-api` checks that
+  Mistral and OpenAI keep timestamps within their chunk's bounds, but nothing guards
+  against it at runtime if a provider (say, a custom endpoint) gets it wrong.
 
 ## Development
 
@@ -92,21 +108,24 @@ response, without paying on every `git push`, there's a separate manual script:
 `tests/manual/real-api.manual.ts`, run only via `npm run test:real-api`.
 
 It splits a real audio file (long enough to produce several chunks) with `ffmpeg`, sends
-each chunk to the provider you pick, then writes the resulting Markdown to
-`test-results/` (git-ignored) for review. Nothing is committed, nothing is logged; the
-API key is only ever used in the HTTP header.
+each chunk to the provider you pick, checks that the returned segments have actual text
+and numeric timestamps that stay inside the chunk's bounds (catching absolute timestamps
+or a different unit, which would silently break reassembly), then writes the resulting
+Markdown to `test-results/` (git-ignored) for review. Nothing is committed, nothing is
+logged; the API key is only ever used in the HTTP header.
 
-Configure it with environment variables kept out of the repo (e.g. a file in your home
-directory, never in the project):
+The test audio file goes in `tests/manual/audio/` (git-ignored, kept in the repo just
+for path convenience). API keys stay out of the repo, e.g. in a file in your home
+directory:
 
 ```bash
 # ~/.config/openmeetrec/test.env — never in the repo
-export OMR_TEST_AUDIO=~/somewhere/long-recording.webm   # a few minutes, several chunks
-export MISTRAL_API_KEY=...                               # or OPENAI_API_KEY, depending on provider
+export MISTRAL_API_KEY=...   # or OPENAI_API_KEY, depending on provider
 ```
 
 ```bash
 source ~/.config/openmeetrec/test.env
+export OMR_TEST_AUDIO=tests/manual/audio/long-recording.webm   # a few minutes, several chunks
 OMR_TEST_PROVIDER=mistral npm run test:real-api
 OMR_TEST_PROVIDER=openai npm run test:real-api
 ```
