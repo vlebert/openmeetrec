@@ -54,21 +54,7 @@ MVP, Chromium only. Firefox is out of scope for now, though the capture layer is
 behind an interface so it can be added without rewriting the rest.
 
 Tested end to end: real meetings recorded start to finish, and the transcription
-pipeline checked against the real Mistral (with diarization) and OpenAI APIs, not just
-the mock endpoint used in CI. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped so
-far.
-
-Known limitations:
-
-- `chrome.tabCapture` isn't covered by automated tests: the `activeTab` grant only
-  exists when a user clicks the extension themselves, so no automation can obtain it.
-  The integration test substitutes the capture strategy and covers everything
-  downstream.
-- Speaker labels are assigned per chunk and aren't reconciled across chunks; the
-  exported Markdown flags this with a visible "Chunk N" break.
-- Timestamps are taken as returned by the provider. `npm run test:real-api` checks that
-  Mistral and OpenAI keep timestamps within their chunk's bounds, but nothing guards
-  against it at runtime if a provider (say, a custom endpoint) gets it wrong.
+pipeline checked against the real Mistral (with diarization) and OpenAI APIs.
 
 ## Development
 
