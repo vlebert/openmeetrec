@@ -3,7 +3,7 @@
   "name": "OpenMeetRec",
   "version": "0.3.0",
   "description": "Records and transcribes the audio of your web video conferences, no bot, no imposed cloud.",
-  "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads"],
+  "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads", "tabs", "notifications"],
   "host_permissions": ["https://api.mistral.ai/*", "https://api.openai.com/*"],
   "optional_host_permissions": ["<all_urls>"],
   "icons": {

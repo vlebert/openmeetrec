@@ -32,6 +32,8 @@ Fait :
   le popup s'est refermé (changement d'onglet, clic ailleurs).
 - Logo et icônes de l'extension (16/32/48/128). Le point central du logo est rouge pendant
   l'enregistrement et gris au repos : l'icône porte l'état, en plus du badge « REC ».
+- Rappel d'enregistrement : une notification système à l'ouverture d'une page de visio, sur une
+  liste d'URLs pré-remplie et éditable dans les réglages. Rien n'est enregistré automatiquement.
 
 À venir :
 
@@ -51,6 +53,9 @@ Fait :
 - Les identifiants de locuteurs sont attribués chunk par chunk et ne sont pas rapprochés entre
   chunks ; le markdown exporté le signale, et une section « Chunk N » sépare visuellement le texte
   de chaque chunk pour rendre ce reset repérable.
+- **Le rappel de réunion n'a pas été vu sur une vraie visio.** La reconnaissance d'URL est testée
+  unitairement, mais la notification système elle-même (et le comportement des SPA comme Teams, qui
+  changent d'URL sans recharger) reste à valider à la main.
 - **Les timestamps renvoyés par le provider sont repris tels quels.** Un provider qui daterait un
   segment hors des bornes de son propre chunk produirait un transcript incohérent, sans
   avertissement. Constaté en test avec un faux endpoint mal réglé ; reste à décider s'il faut

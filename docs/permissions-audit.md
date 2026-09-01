@@ -7,7 +7,8 @@
 ## Principes
 
 - Aucune télémétrie, aucun envoi réseau qui ne soit déclenché par une action explicite de l'utilisateur.
-- Aucune permission d'hôte sur les plateformes de visio : la capture passe par `activeTab`.
+- Aucune permission d'hôte sur les plateformes de visio : la capture passe par `activeTab`, et
+  aucun content script n'est injecté dans les pages.
 - Les clés API restent en `chrome.storage.local` (jamais `storage.sync`, jamais loggées).
 - Le réseau est restreint aux API de transcription supportées ; l'accès élargi est **optionnel** et
   demandé à la volée.
@@ -49,6 +50,35 @@
 - **Portée** : `chrome.storage.local` uniquement. Les clés API ne sont **jamais** écrites en
   `storage.sync` (qui les enverrait sur les serveurs du navigateur) ni journalisées.
 
+### `tabs`
+
+- **Pourquoi** : reconnaître qu'un onglet est sur une page de visioconférence, pour rappeler de
+  lancer l'enregistrement (fonctionnalité « Meeting reminder »). Sans cette permission, les objets
+  `Tab` renvoyés par l'API sont privés de `url`, `pendingUrl` et `title` : la détection est
+  impossible depuis le service worker.
+- **Quand** : sur `chrome.tabs.onUpdated`, uniquement pour comparer l'URL aux motifs de la liste
+  configurée par l'utilisateur.
+- **Ne permet pas** : d'accéder au *contenu* des pages (aucun content script, aucun `scripting`),
+  ni de capturer un onglet — `tabCapture` continue d'exiger `activeTab`.
+- **Ce qui est fait de l'URL** : elle est comparée aux motifs en mémoire, puis jetée. Seuls le
+  `tabId` et le motif reconnu sont mémorisés en `chrome.storage.session`, le temps d'éviter une
+  notification en double ; rien n'est écrit en `storage.local`, journalisé, ni envoyé sur le réseau.
+- **Comment s'en passer** : décocher « Meeting reminder » dans les réglages désactive toute
+  détection. La permission reste déclarée (Chrome ne permet pas de la rendre optionnelle), mais
+  plus aucune URL n'est lue.
+- **Alternative écartée** : un content script sur les domaines de visio (bannière dans la page)
+  verrait le contenu des pages de réunion et imposerait des permissions d'hôte sur ces domaines —
+  plus intrusif que de lire une URL, pour un résultat équivalent.
+
+### `notifications`
+
+- **Pourquoi** : afficher le rappel « vous êtes sur une page de visio, pensez à enregistrer ».
+- **Quand** : à l'arrivée d'un onglet sur une URL reconnue, si l'option est active et qu'aucune
+  session n'est en cours. Une notification par onglet et par motif reconnu.
+- **Ne permet pas** : de lancer un enregistrement — un clic sur une notification n'accorde pas
+  `activeTab`. Le clic ne fait que réactiver l'onglet concerné ; le départ reste un clic explicite
+  sur l'icône de l'extension.
+
 ### `downloads`
 
 - **Pourquoi** : écrire le fichier Markdown final, et l'audio `.webm` si l'option est activée.
@@ -80,8 +110,7 @@
 
 | Permission | Pourquoi on s'en passe |
 |---|---|
-| `tabs` | `activeTab` suffit : il donne le `tabId` **et** l'URL de l'onglet actif quand le popup est ouvert. `chrome.tabs.query`/`onRemoved`/`create` sont utilisables sans cette permission, seul l'accès aux URLs d'onglets tiers l'exigerait — et on n'en a pas besoin |
-| `scripting` / `content_scripts` | Aucune injection dans les pages en MVP |
+| `scripting` / `content_scripts` | Aucune injection dans les pages : le rappel de réunion passe par une notification système, pas par une bannière insérée dans la page |
 | `<all_urls>` en requis | Réservé au provider custom, et alors seulement en optionnel |
 | `desktopCapture` | `tabCapture` évite le picker système et l'accès à l'écran entier |
 | `identity`, `cookies`, `history`, `bookmarks` | Sans rapport avec la fonction de l'extension |

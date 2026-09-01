@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_CHUNK_OPTIONS, planChunks } from '@/audio/chunking';
+import { DEFAULT_CONFIG } from '@/config/config';
 import { chunkBoundaries } from '@/audio/merge';
 import { createProvider } from '@/providers/factory';
 import { runTranscription } from '@/pipeline/pipeline';
@@ -75,6 +76,9 @@ describe.skipIf(!canRun)('validation réelle', () => {
 
       const customEndpoint = process.env['OMR_TEST_ENDPOINT'];
       const config: Config = {
+        // Les réglages hors pipeline (rappel de réunion…) restent aux défauts :
+        // ce script ne valide que la transcription.
+        ...DEFAULT_CONFIG,
         provider: provider === 'custom' ? 'custom' : provider,
         model: model ?? (provider === 'openai' ? 'whisper-1' : 'voxtral-mini-latest'),
         apiKeys: { [provider]: apiKey! },

@@ -196,6 +196,36 @@ function detectStrategy(): CaptureStrategy {
 }
 ```
 
+### 3.3bis Rappel d'enregistrement (détection de page de visio)
+
+Le risque le plus banal du produit n'est pas technique : c'est d'oublier de cliquer sur Start. Le
+service worker écoute donc `chrome.tabs.onUpdated` et compare l'URL de l'onglet à une liste de
+motifs (`meetings/patterns.ts`, module pur). En cas de reconnaissance, une notification système
+rappelle de lancer l'enregistrement.
+
+Trois contraintes ont fixé cette forme :
+
+- **La notification ne peut pas démarrer la capture.** `tabCapture` exige `activeTab`, accordé
+  seulement par un clic sur l'icône de l'extension, un raccourci `commands` ou un item de menu
+  contextuel — jamais par un clic sur une notification ni par un clic dans une page. Le clic sur la
+  notification réactive l'onglet ; le départ reste explicite.
+- **Une bannière injectée dans la page a été écartée** : plus visible, mais elle imposerait un
+  content script et des permissions d'hôte sur les domaines de visio, donc l'accès au *contenu* des
+  réunions — pour un résultat que la notification obtient sans rien lire de la page.
+- **`tabs` est indispensable** : sans cette permission, les objets `Tab` sont privés de `url` et de
+  `title`. C'est le seul élargissement de permission de la fonctionnalité, et il est documenté dans
+  l'audit.
+
+La liste de motifs est **livrée pré-remplie mais stockée en config** : l'utilisateur la complète ou
+en retire des lignes dans les réglages, et c'est aussi le seul mécanisme d'exclusion (retirer un
+site = ne plus être rappelé dessus). Une liste vide est respectée telle quelle ; les défauts ne
+servent qu'à amorcer une config qui n'en a jamais eu.
+
+Anti-spam : le motif reconnu est mémorisé par onglet en `chrome.storage.session`. Tant que l'onglet
+reste sur le même motif, aucune seconde notification — sans quoi une SPA comme Teams, qui change
+d'URL à chaque clic, en produirait une pluie. L'entrée est oubliée quand l'onglet quitte la visio,
+est fermé, ou quand un enregistrement démarre dessus.
+
 ### 3.4 Autorisation du micro
 
 Contrainte Chromium : **un offscreen document ne peut pas déclencher de prompt de
@@ -418,6 +448,8 @@ interface Config {
   diarize: boolean;
   downloadAudio: boolean;    // défaut false
   language: string | null;   // null = auto
+  meetingReminder: boolean;  // défaut true
+  meetingPatterns: string[]; // pré-rempli, éditable dans les réglages (§3.3bis)
 }
 ```
 
@@ -428,7 +460,7 @@ interface Config {
   "manifest_version": 3,
   "name": "OpenMeetRec",
   "version": "0.1.0",
-  "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads"],
+  "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "downloads", "tabs", "notifications"],
   "host_permissions": ["https://api.mistral.ai/*", "https://api.openai.com/*"],
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background/service-worker.js", "type": "module" },
@@ -439,7 +471,10 @@ interface Config {
 
 Notes :
 
-- Pas de `content_scripts` en MVP.
+- Pas de `content_scripts` : le rappel de réunion passe par une notification système (§3.3bis),
+  jamais par une bannière insérée dans la page.
+- `tabs` sert uniquement à lire l'URL d'un onglet pour la comparer aux motifs de visio ;
+  `notifications`, à afficher le rappel.
 - Pas de `web_accessible_resources` : aucune page web tierce n'a besoin de référencer nos ressources.
 - `host_permissions` limité aux deux API supportées. `<all_urls>` est **optionnel** et demandé à la
   volée uniquement si l'utilisateur configure un endpoint custom — il n'est jamais accordé par défaut.
@@ -485,6 +520,9 @@ Chromium headful sur le display VNC de la machine (`DISPLAY=:1`, pas besoin de x
   l'onglet toujours audible (ré-injection présente dans le graphe audio).
 - `providers.spec.ts` : provider **mock** → transcript déterministe.
 - `options.spec.ts` : config persistée, « tester la clé » mocké, clé jamais loggée.
+- `meeting-reminder.spec.ts` : navigation vers une URL de la liste → notification créée, puis
+  retirée en quittant la page ; rien quand l'option est décochée ou l'URL hors liste. Vérifie que
+  la permission `tabs` délivre bien l'URL au service worker (§3.3bis).
 
 **Provider mock obligatoire** : pas de réseau, pas de clé API en CI.
 

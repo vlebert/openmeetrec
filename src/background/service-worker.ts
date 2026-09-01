@@ -12,6 +12,7 @@
 import { detectStrategyId } from '@/capture/detect';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { loadConfig } from '@/config/storage';
+import { clearMeetingReminder, registerMeetingReminder } from '@/background/meetingReminder';
 import { absoluteIcon, IDLE_ICON, RECORDING_ICON } from '@/shared/icons';
 import {
   IDLE_STATE,
@@ -71,6 +72,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     const state = await readState();
     if (state.status === 'recording' && state.tabId === tabId) await stopRecording();
   })();
+});
+
+registerMeetingReminder({
+  isSessionActive: async () => {
+    const { status } = await readState();
+    return status === 'recording' || status === 'processing';
+  },
 });
 
 async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
@@ -150,6 +158,7 @@ async function startRecording(
     return { ok: false, error: sessionError };
   }
 
+  await clearMeetingReminder(message.tabId);
   await writeState({
     ...IDLE_STATE,
     status: 'recording',

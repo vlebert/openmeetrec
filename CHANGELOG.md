@@ -6,6 +6,24 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Ajouté
+
+- Rappel d'enregistrement : à l'ouverture d'une page reconnue comme une visioconférence, une
+  notification système rappelle de lancer la capture. Rien n'est enregistré automatiquement — le
+  départ reste un clic sur l'icône de l'extension, seul geste qui accorde l'autorisation de
+  capturer l'onglet.
+- Réglages « Meeting reminder » : la liste des URLs de visio (Meet, Teams, Zoom, Jitsi, Whereby,
+  Webex…) est pré-remplie et entièrement éditable — une ligne par motif, `*` comme joker. Retirer
+  une ligne suffit à ne plus être rappelé sur ce site ; l'option se désactive en entier par une
+  case à cocher.
+
+### Modifié
+
+- Nouvelles permissions `tabs` et `notifications`, requises par le rappel ci-dessus : `tabs` parce
+  que Chrome retire l'URL des onglets sans elle, `notifications` pour afficher le rappel. Les URLs
+  sont comparées aux motifs puis jetées — jamais stockées ni envoyées. Voir
+  `docs/permissions-audit.md`.
+
 ## [0.3.0] - 2026-08-30
 
 ### Ajouté

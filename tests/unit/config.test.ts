@@ -6,6 +6,7 @@ import {
   normalizeConfig,
   validateConfig,
 } from '@/config/config';
+import { DEFAULT_MEETING_PATTERNS } from '@/meetings/patterns';
 import type { Config } from '@/shared/types';
 
 const withDefaults = (overrides: Partial<Config> = {}): Config => ({
@@ -18,6 +19,29 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig(undefined)).toEqual(DEFAULT_CONFIG);
     expect(normalizeConfig(null)).toEqual(DEFAULT_CONFIG);
     expect(normalizeConfig({})).toEqual(DEFAULT_CONFIG);
+  });
+
+  it('amorce la liste de motifs de visio quand le storage n en a pas', () => {
+    expect(normalizeConfig({}).meetingPatterns).toEqual([...DEFAULT_MEETING_PATTERNS]);
+    expect(normalizeConfig({}).meetingReminder).toBe(true);
+  });
+
+  /**
+   * Une liste vide n'est pas une liste absente : c'est l'utilisateur qui a tout
+   * retiré. Y réinjecter les défauts lui rendrait les rappels qu'il a supprimés.
+   */
+  it('respecte une liste de motifs vidée par l utilisateur', () => {
+    expect(normalizeConfig({ meetingPatterns: [] }).meetingPatterns).toEqual([]);
+  });
+
+  it('normalise les motifs de visio venus du storage', () => {
+    expect(
+      normalizeConfig({ meetingPatterns: ['https://Meet.Google.com/', 'meet.google.com', 42, ''] })
+        .meetingPatterns,
+    ).toEqual(['meet.google.com/*']);
+    expect(normalizeConfig({ meetingPatterns: 'meet.google.com' }).meetingPatterns).toEqual([
+      ...DEFAULT_MEETING_PATTERNS,
+    ]);
   });
 
   it('ignore un provider inconnu', () => {

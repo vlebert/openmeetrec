@@ -8,6 +8,7 @@
 
 import { maskApiKey, validateConfig } from '@/config/config';
 import { loadConfig, saveConfig } from '@/config/storage';
+import { DEFAULT_MEETING_PATTERNS, normalizeMeetingPatterns } from '@/meetings/patterns';
 import { createProvider } from '@/providers/factory';
 import { PROVIDER_PRESETS, getProviderPreset } from '@/providers/registry';
 import type { Config, ProviderId } from '@/shared/types';
@@ -30,6 +31,9 @@ const el = {
   diarizeHint: byId<HTMLParagraphElement>('diarize-hint'),
   downloadAudio: byId<HTMLInputElement>('download-audio'),
   language: byId<HTMLInputElement>('language'),
+  meetingReminder: byId<HTMLInputElement>('meeting-reminder'),
+  meetingPatterns: byId<HTMLTextAreaElement>('meeting-patterns'),
+  resetPatterns: byId<HTMLButtonElement>('reset-patterns'),
   save: byId<HTMLButtonElement>('save'),
   status: byId<HTMLElement>('status'),
   problems: byId<HTMLUListElement>('problems'),
@@ -41,7 +45,15 @@ let keyEdited = false;
 
 el.provider.addEventListener('change', () => {
   const provider = el.provider.value as Provider;
-  config = { ...config, provider, model: getProviderPreset(provider).models[0]?.id ?? config.model };
+  config = {
+    ...config,
+    provider,
+    model: getProviderPreset(provider).models[0]?.id ?? config.model,
+    // Changer de provider redessine toute la page : sans ce report, une liste de
+    // motifs en cours d'édition serait remplacée par celle du storage.
+    meetingReminder: el.meetingReminder.checked,
+    meetingPatterns: el.meetingPatterns.value.split('\n'),
+  };
   keyEdited = false;
   render();
 });
@@ -50,6 +62,9 @@ el.apiKey.addEventListener('input', () => {
 });
 el.save.addEventListener('click', () => void onSave());
 el.testKey.addEventListener('click', () => void onTestKey());
+el.resetPatterns.addEventListener('click', () => {
+  el.meetingPatterns.value = DEFAULT_MEETING_PATTERNS.join('\n');
+});
 
 void init();
 
@@ -94,6 +109,8 @@ function render(): void {
 
   el.downloadAudio.checked = config.downloadAudio;
   el.language.value = config.language ?? '';
+  el.meetingReminder.checked = config.meetingReminder;
+  el.meetingPatterns.value = config.meetingPatterns.join('\n');
   el.testResult.textContent = '';
   showProblems();
 }
@@ -116,6 +133,10 @@ function collect(): Config {
     diarize: el.diarize.checked,
     downloadAudio: el.downloadAudio.checked,
     language: language === '' ? null : language,
+    meetingReminder: el.meetingReminder.checked,
+    // Normalisé ici plutôt qu'à la lecture seulement : après enregistrement, le
+    // champ réaffiche la liste telle qu'elle sera réellement appliquée.
+    meetingPatterns: normalizeMeetingPatterns(el.meetingPatterns.value.split('\n')),
   };
 }
 
