@@ -6,6 +6,8 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+## [0.4.0] - 2026-09-01
+
 ### Ajouté
 
 - Rappel d'enregistrement : à l'ouverture d'une page reconnue comme une visioconférence, une
