@@ -1,122 +1,121 @@
-# OpenMeetRec — Audit des permissions
+# OpenMeetRec — Permissions audit
 
-> Une entrée par permission déclarée dans `src/manifest.json`. Chaque entrée dit à quoi la permission
-> sert, quand elle est effectivement utilisée, et ce qu'elle ne permet pas. Toute permission ajoutée
-> au manifest doit être documentée ici (règle projet).
+> One entry per permission declared in `src/manifest.json`. Each entry says what the permission
+> is for, when it's actually used, and what it doesn't allow. Any permission added to the
+> manifest must be documented here (project rule).
 
-## Principes
+## Principles
 
-- Aucune télémétrie, aucun envoi réseau qui ne soit déclenché par une action explicite de l'utilisateur.
-- Aucune permission d'hôte sur les plateformes de visio : la capture passe par `activeTab`, et
-  aucun content script n'est injecté dans les pages.
-- Les clés API restent en `chrome.storage.local` (jamais `storage.sync`, jamais loggées).
-- Le réseau est restreint aux API de transcription supportées ; l'accès élargi est **optionnel** et
-  demandé à la volée.
+- No telemetry, no network call that isn't triggered by an explicit user action.
+- No host permission on video conferencing platforms: capture goes through `activeTab`, and
+  no content script is injected into pages.
+- API keys stay in `chrome.storage.local` (never `storage.sync`, never logged).
+- Network access is restricted to the supported transcription APIs; broader access is
+  **optional** and requested on demand.
 
-## Permissions requises
+## Required permissions
 
 ### `activeTab`
 
-- **Pourquoi** : accorde un accès temporaire à l'onglet sur lequel l'utilisateur ouvre le popup, ce
-  qui autorise `tabCapture` sur cet onglet précis.
-- **Quand** : au clic sur l'icône de l'extension, et uniquement pour cet onglet.
-- **Ne permet pas** : de lire ou capturer d'autres onglets, ni d'agir en arrière-plan sur des onglets
-  que l'utilisateur n'a pas explicitement désignés.
-- **Alternative écartée** : `host_permissions` sur les domaines de visio — beaucoup plus large, et
-  impossible à maintenir pour « n'importe quelle plateforme ».
+- **Why**: grants temporary access to the tab the user opens the popup on, which authorizes
+  `tabCapture` on that specific tab.
+- **When**: on click of the extension icon, and only for that tab.
+- **Does not allow**: reading or capturing other tabs, or acting in the background on tabs
+  the user hasn't explicitly designated.
+- **Alternative discarded**: `host_permissions` on video conferencing domains — much broader,
+  and impossible to maintain for "any platform".
 
 ### `tabCapture`
 
-- **Pourquoi** : capturer l'audio des participants distants, qui n'est accessible que via le flux
-  audio de l'onglet de visio.
-- **Quand** : après un clic explicite sur Start, sur le `tabId` de l'onglet où le popup est ouvert.
-- **Ne permet pas** : de capturer la vidéo (on ne demande que l'audio), ni de démarrer une capture
-  sans geste utilisateur.
-- **Effet de bord assumé** : la capture détourne le son de l'onglet ; il est ré-injecté vers la sortie
-  audio pour que l'utilisateur continue d'entendre sa réunion (F-CAP-06).
+- **Why**: capture the audio of remote participants, which is only accessible through the
+  audio stream of the meeting tab.
+- **When**: after an explicit click on Start, on the `tabId` of the tab the popup is open on.
+- **Does not allow**: capturing video (only audio is requested), or starting a capture
+  without a user gesture.
+- **Accepted side effect**: the capture diverts the tab's sound; it is re-injected to the
+  audio output so the user keeps hearing their meeting (F-CAP-06).
 
 ### `offscreen`
 
-- **Pourquoi** : un service worker MV3 n'a pas d'API DOM et peut être arrêté à tout moment. Le
-  document offscreen tient `getUserMedia`, le graphe Web Audio et les `MediaRecorder` pendant toute la
+- **Why**: an MV3 service worker has no DOM API and can be stopped at any time. The offscreen
+  document holds `getUserMedia`, the Web Audio graph and the `MediaRecorder`s for the whole
   session.
-- **Quand** : créé au Start, détruit à la fin du pipeline.
-- **Ne permet pas** : d'afficher quoi que ce soit à l'utilisateur, ni d'accéder au contenu des pages.
+- **When**: created on Start, destroyed at the end of the pipeline.
+- **Does not allow**: displaying anything to the user, or accessing page content.
 
 ### `storage`
 
-- **Pourquoi** : persister la configuration (provider, modèle, options) et les clés API.
-- **Quand** : lecture au démarrage d'une session, écriture depuis la page d'options.
-- **Portée** : `chrome.storage.local` uniquement. Les clés API ne sont **jamais** écrites en
-  `storage.sync` (qui les enverrait sur les serveurs du navigateur) ni journalisées.
+- **Why**: persist configuration (provider, model, options) and API keys.
+- **When**: read at the start of a session, written from the options page.
+- **Scope**: `chrome.storage.local` only. API keys are **never** written to `storage.sync`
+  (which would send them to the browser's servers) nor logged.
 
 ### `tabs`
 
-- **Pourquoi** : reconnaître qu'un onglet est sur une page de visioconférence, pour rappeler de
-  lancer l'enregistrement (fonctionnalité « Meeting reminder »). Sans cette permission, les objets
-  `Tab` renvoyés par l'API sont privés de `url`, `pendingUrl` et `title` : la détection est
-  impossible depuis le service worker.
-- **Quand** : sur `chrome.tabs.onUpdated`, uniquement pour comparer l'URL aux motifs de la liste
-  configurée par l'utilisateur.
-- **Ne permet pas** : d'accéder au *contenu* des pages (aucun content script, aucun `scripting`),
-  ni de capturer un onglet — `tabCapture` continue d'exiger `activeTab`.
-- **Ce qui est fait de l'URL** : elle est comparée aux motifs en mémoire, puis jetée. Seuls le
-  `tabId` et le motif reconnu sont mémorisés en `chrome.storage.session`, le temps d'éviter une
-  notification en double ; rien n'est écrit en `storage.local`, journalisé, ni envoyé sur le réseau.
-- **Comment s'en passer** : décocher « Meeting reminder » dans les réglages désactive toute
-  détection. La permission reste déclarée (Chrome ne permet pas de la rendre optionnelle), mais
-  plus aucune URL n'est lue.
-- **Alternative écartée** : un content script sur les domaines de visio (bannière dans la page)
-  verrait le contenu des pages de réunion et imposerait des permissions d'hôte sur ces domaines —
-  plus intrusif que de lire une URL, pour un résultat équivalent.
+- **Why**: recognize that a tab is on a video conferencing page, to remind the user to start
+  recording (the "Meeting reminder" feature). Without this permission, the `Tab` objects
+  returned by the API are stripped of `url`, `pendingUrl` and `title`: detection is impossible
+  from the service worker.
+- **When**: on `chrome.tabs.onUpdated`, only to compare the URL against the pattern list
+  configured by the user.
+- **Does not allow**: accessing page *content* (no content script, no `scripting`), or
+  capturing a tab — `tabCapture` still requires `activeTab`.
+- **What is done with the URL**: it is compared against the in-memory patterns, then
+  discarded. Only the `tabId` and the matched pattern are kept in
+  `chrome.storage.session`, to avoid a duplicate notification; nothing is written to
+  `storage.local`, logged, or sent over the network.
+- **How to opt out**: unchecking "Meeting reminder" in settings disables all detection. The
+  permission stays declared (Chrome doesn't allow making it optional), but no URL is read
+  anymore.
+- **Alternative discarded**: a content script on video conferencing domains (an in-page
+  banner) would see the content of meeting pages and require host permissions on those
+  domains — more intrusive than reading a URL, for an equivalent result.
 
 ### `notifications`
 
-- **Pourquoi** : afficher le rappel « vous êtes sur une page de visio, pensez à enregistrer ».
-- **Quand** : à l'arrivée d'un onglet sur une URL reconnue, si l'option est active et qu'aucune
-  session n'est en cours. Une notification par onglet et par motif reconnu.
-- **Ne permet pas** : de lancer un enregistrement — un clic sur une notification n'accorde pas
-  `activeTab`. Le clic ne fait que réactiver l'onglet concerné ; le départ reste un clic explicite
-  sur l'icône de l'extension.
+- **Why**: show the reminder "you're on a video conferencing page, remember to record".
+- **When**: when a tab lands on a recognized URL, if the option is enabled and no session is
+  currently running. One notification per tab and per matched pattern.
+- **Does not allow**: starting a recording — clicking a notification doesn't grant
+  `activeTab`. The click only refocuses the relevant tab; starting a recording remains an
+  explicit click on the extension icon.
 
 ### `downloads`
 
-- **Pourquoi** : écrire le fichier Markdown final, et l'audio `.webm` si l'option est activée.
-- **Quand** : à la fin du pipeline, ou sur clic du bouton de téléchargement.
-- **Ne permet pas** : de lire les téléchargements existants de l'utilisateur (aucun appel à
-  `chrome.downloads.search` sur autre chose que nos propres téléchargements).
+- **Why**: write the final Markdown file, and the `.webm` audio if the option is enabled.
+- **When**: at the end of the pipeline, or on click of the download button.
+- **Does not allow**: reading the user's existing downloads (no call to
+  `chrome.downloads.search` on anything other than our own downloads).
 
-## Permissions d'hôte
+## Host permissions
 
 ### `host_permissions: ["https://api.mistral.ai/*", "https://api.openai.com/*"]`
 
-- **Pourquoi** : envoyer les chunks audio à l'API de transcription choisie, et tester la validité
-  d'une clé.
-- **Quand** : uniquement pendant un pipeline lancé par l'utilisateur, ou sur clic du bouton
-  « tester la clé ».
-- **Restriction** : limité aux deux API supportées en MVP. Aucun autre domaine n'est joignable par
-  défaut.
+- **Why**: send audio chunks to the chosen transcription API, and test a key's validity.
+- **When**: only during a pipeline started by the user, or on click of the "test key" button.
+- **Restriction**: limited to the two APIs supported in the MVP. No other domain is reachable
+  by default.
 
 ### `optional_host_permissions: ["<all_urls>"]`
 
-- **Pourquoi** : permettre le provider « Custom » (endpoint auto-hébergé, proxy d'entreprise,
-  transcription locale…), dont l'URL est inconnue à l'avance.
-- **Quand** : demandé à la volée, uniquement si l'utilisateur configure un endpoint custom dans les
-  options. Jamais accordé à l'installation.
-- **Ne permet pas** : d'accéder aux pages web de l'utilisateur — l'extension n'injecte aucun content
-  script et n'utilise cette permission que pour `fetch` vers l'endpoint configuré.
+- **Why**: enable the "Custom" provider (self-hosted endpoint, corporate proxy, local
+  transcription…), whose URL is unknown in advance.
+- **When**: requested on the fly, only if the user configures a custom endpoint in the
+  options. Never granted at install time.
+- **Does not allow**: accessing the user's web pages — the extension injects no content
+  script and only uses this permission for `fetch` calls to the configured endpoint.
 
-## Non demandé (et pourquoi)
+## Not requested (and why)
 
-| Permission | Pourquoi on s'en passe |
+| Permission | Why we do without it |
 |---|---|
-| `scripting` / `content_scripts` | Aucune injection dans les pages : le rappel de réunion passe par une notification système, pas par une bannière insérée dans la page |
-| `<all_urls>` en requis | Réservé au provider custom, et alors seulement en optionnel |
-| `desktopCapture` | `tabCapture` évite le picker système et l'accès à l'écran entier |
-| `identity`, `cookies`, `history`, `bookmarks` | Sans rapport avec la fonction de l'extension |
-| `storage.sync` | Les clés API ne doivent jamais quitter la machine |
+| `scripting` / `content_scripts` | No injection into pages: the meeting reminder goes through a system notification, not a banner inserted into the page |
+| `<all_urls>` as required | Reserved for the custom provider, and only as optional there |
+| `desktopCapture` | `tabCapture` avoids the system picker and full-screen access |
+| `identity`, `cookies`, `history`, `bookmarks` | Unrelated to the extension's function |
+| `storage.sync` | API keys must never leave the machine |
 
-## Vérification
+## Verification
 
-- Les tests d'intégration (`options.spec.ts`) vérifient qu'aucune clé API n'apparaît dans les logs.
-- Le manifest est lu par un test unitaire qui échoue si une permission non documentée ici est ajoutée.
+- Integration tests (`options.spec.ts`) check that no API key appears in the logs.
+- The manifest is read by a unit test that fails if a permission not documented here is added.

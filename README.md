@@ -139,6 +139,10 @@ The chunking/merge pipeline design is inspired by a Python project of mine calle
 transcription and doesn't include a second, LLM-driven summarization step; that's
 intentionally left to whatever tool you use downstream.
 
+## Privacy
+
+See [`PRIVACY.md`](PRIVACY.md).
+
 ## License
 
 MIT.
