@@ -8,7 +8,7 @@ OpenAI Whisper) and exports the result as Markdown.
 No bot joining the call, no mandatory cloud service, no network request you didn't
 trigger yourself.
 
-> Working name. The project may be renamed at any point; the repository isn't tied to it.
+<img src="docs/screenshot.png" alt="OpenMeetRec popup while recording a meeting" width="320">
 
 ## Why
 

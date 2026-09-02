@@ -1,5 +1,7 @@
 node_modules/
 dist/
+store/*
+!store/listing.md
 .vite/
 *.log
 .DS_Store
