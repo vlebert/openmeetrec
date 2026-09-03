@@ -67,9 +67,11 @@ export async function runTranscription(run: TranscriptionRun): Promise<Transcrip
     okTexts.push(entry.value.text);
   });
 
-  // Un seul chunk sans segments suffit à casser la coupe au milieu de l'overlap :
-  // on bascule alors tout le document en mode texte, avec l'avertissement.
-  const hadSegments = okChunks.length > 0 && okSegments.every((segments) => segments.length > 0);
+  // Un chunk sans segments (silence, pause) ne contribue simplement rien au
+  // merge : la coupe à l'overlap des autres chunks ne dépend que des bornes de
+  // `ChunkInfo`, pas du contenu du voisin. On ne bascule en mode texte brut que
+  // si le provider n'a renvoyé de segments pour aucun chunk.
+  const hadSegments = okSegments.some((segments) => segments.length > 0);
 
   if (!hadSegments) {
     return {

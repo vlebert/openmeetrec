@@ -6,6 +6,14 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Corrigé
+
+- Un chunk sans parole (silence) faisait perdre les timestamps de toute la réunion, avec
+  l'avertissement « The model in use does not return timestamps », alors que les autres chunks en
+  avaient bien. Confirmé contre l'API Voxtral : un chunk de silence renvoie légitimement
+  `segments: []`. Ce chunk ne contribue désormais rien au merge au lieu de dégrader tout le
+  document en concaténation brute.
+
 ### Modifié
 
 - Chunking par défaut : 3 min / overlap 10 s (au lieu de 5 min / 30 s) — des chunks plus courts,

@@ -65,6 +65,23 @@ describe('runTranscription', () => {
     expect(outcome.text.length).toBeGreaterThan(0);
   });
 
+  // F-TR-04 : un chunk silencieux ne doit pas faire perdre les timestamps de
+  // toute la réunion (cf. bug rapporté en usage réel : Voxtral renvoie
+  // `segments: []` sur du silence).
+  it('un chunk sans segments ne fait pas perdre les timestamps des autres', async () => {
+    const outcome = await runTranscription({
+      chunks: CHUNKS,
+      provider: emptyOnSize(5 * 1024 + 1),
+      loadChunk: async (chunk) => new Blob(['x'.repeat(5 * 1024 + chunk.index)]),
+      opts: OPTS,
+    });
+
+    expect(outcome.hadSegments).toBe(true);
+    expect(outcome.failedChunks).toEqual([]);
+    expect(outcome.transcribedCount).toBe(CHUNKS.length);
+    expect(outcome.segments.length).toBeGreaterThan(0);
+  });
+
   it('rapporte l’avancement au fil des chunks', async () => {
     const progress: number[] = [];
     await runTranscription({
@@ -103,6 +120,20 @@ function failingOnSize(size: number): TranscriptionProvider {
     supportsDiarization: false,
     transcribe: async (audio, opts) => {
       if (audio.size === size) throw new Error('boom');
+      return mock.transcribe(audio, opts);
+    },
+    testKey: async () => true,
+  };
+}
+
+function emptyOnSize(size: number): TranscriptionProvider {
+  const mock = new MockProvider();
+  return {
+    id: 'mock',
+    supportsSegments: true,
+    supportsDiarization: false,
+    transcribe: async (audio, opts) => {
+      if (audio.size === size) return { text: '', segments: [] };
       return mock.transcribe(audio, opts);
     },
     testKey: async () => true,

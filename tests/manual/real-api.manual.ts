@@ -35,9 +35,11 @@ const TIMESTAMP_TOLERANCE_S = 2;
 function assertSegmentFormat(chunk: ChunkInfo, result: TranscriptionResult, expectSegments: boolean): void {
   if (!expectSegments) return;
   const chunkAudioDuration = chunk.end - chunk.start;
-  if (!result.segments || result.segments.length === 0) {
-    throw new Error(`chunk ${chunk.index} : aucun segment renvoyé alors que le provider est censé en fournir`);
-  }
+  // Un chunk sans parole (silence) renvoie légitimement `segments: []` (constaté
+  // avec Voxtral) : le pipeline le traite désormais comme une contribution nulle
+  // plutôt que comme une erreur (cf. pipeline.ts), donc ce n'est pas non plus une
+  // erreur ici.
+  if (!result.segments) return;
   for (const seg of result.segments) {
     if (typeof seg.text !== 'string' || seg.text.trim().length === 0) {
       throw new Error(`chunk ${chunk.index} : segment sans texte (${JSON.stringify(seg)})`);
