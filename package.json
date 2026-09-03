@@ -1,6 +1,6 @@
 {
   "name": "openmeetrec",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Extension de navigateur open source pour enregistrer et transcrire l'audio des visioconférences web",
   "license": "MIT",
   "private": true,

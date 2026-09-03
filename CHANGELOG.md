@@ -6,6 +6,8 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+## [0.5.0] - 2026-09-03
+
 ### Corrigé
 
 - Un chunk sans parole (silence) faisait perdre les timestamps de toute la réunion, avec
