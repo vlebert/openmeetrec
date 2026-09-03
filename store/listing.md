@@ -23,7 +23,7 @@ Records your video call audio and transcribes it with the API you choose. No bot
 ```
 OpenMeetRec records the audio of a video call, tab and microphone, then sends it to a speech-to-text API you configure to produce a Markdown transcript.
 
-It captures the tab's audio directly, so it works with any video conferencing site running in Chrome (Meet, Teams, Zoom, Jitsi, Whereby, Webex, and others), not just one platform. No bot joins the call, and nothing is recorded until you click the extension icon.
+It captures the tab's audio directly, so it works with any video conferencing site running in Chrome, not just one platform. No bot joins the call, and nothing is recorded until you click the extension icon.
 
 How it works:
 
