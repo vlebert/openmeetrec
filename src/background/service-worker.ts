@@ -185,14 +185,17 @@ async function stopRecording(): Promise<Ack> {
 }
 
 /**
- * Reprend une session en échec (F-CAP-08 côté résilience) : les chunks sont
- * déjà en OPFS, il suffit de relancer le pipeline sur le même `sessionId`.
- * Relance *tous* les chunks de la session, pas seulement ceux en échec — le
- * pipeline ne garde pas de résultats partiels d'un appel à l'autre.
+ * Reprend une session en échec, ou retraite une session déjà terminée avec
+ * succès (relancer avec un autre provider/modèle, ou après un correctif du
+ * pipeline) : tant qu'aucun nouvel enregistrement n'a démarré, les chunks sont
+ * encore en OPFS (`pruneSessions` n'efface qu'au prochain `START_RECORDING`),
+ * il suffit de relancer le pipeline sur le même `sessionId`. Relance *tous*
+ * les chunks de la session, pas seulement ceux en échec — le pipeline ne
+ * garde pas de résultats partiels d'un appel à l'autre.
  */
 async function retryPipeline(): Promise<Ack> {
   const state = await readState();
-  const retryable = state.status === 'error' || (state.status === 'done' && state.error !== null);
+  const retryable = state.status === 'error' || state.status === 'done';
   if (!retryable || state.sessionId === null) {
     return { ok: false, error: { code: 'internal', message: 'nothing to retry' } };
   }

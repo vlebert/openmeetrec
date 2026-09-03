@@ -190,6 +190,19 @@ test('reprend la transcription après un échec API, sans perdre les chunks (ret
   expect(markdown).not.toContain('not transcribed');
   expect(markdown).toContain('segment 0');
 
+  // Retraiter une session déjà terminée *avec succès* (pas seulement en échec)
+  // doit aussi marcher : les chunks sont toujours en OPFS tant qu'aucun nouvel
+  // enregistrement n'a démarré (cf. bouton « Reprocess transcription »).
+  const callsBeforeReprocess = api.calls.length;
+  const reprocessed = await send(popup, { target: 'sw', type: 'RETRY_PIPELINE' });
+  expect(reprocessed).toEqual({ ok: true });
+
+  const doneAgain = await waitForDone(popup);
+  expect(doneAgain.status).toBe('done');
+  expect(doneAgain.error).toBeNull();
+  const reprocessCalls = api.calls.slice(callsBeforeReprocess);
+  expect(reprocessCalls).toHaveLength(EXPECTED_CHUNKS);
+
   await meeting.close();
   await popup.close();
 });

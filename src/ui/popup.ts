@@ -21,6 +21,7 @@ const el = {
   micEnabled: byId<HTMLInputElement>('mic-enabled'),
   toggle: byId<HTMLButtonElement>('toggle'),
   error: byId<HTMLParagraphElement>('error'),
+  history: byId<HTMLParagraphElement>('history'),
   retry: byId<HTMLButtonElement>('retry'),
   grantMic: byId<HTMLButtonElement>('grant-mic'),
   platform: byId<HTMLElement>('platform'),
@@ -60,7 +61,7 @@ async function onToggle(): Promise<void> {
     ? { target: 'sw', type: 'STOP_RECORDING' }
     : { target: 'sw', type: 'START_RECORDING', tabId: tabId ?? -1, url: tabUrl, micEnabled: el.micEnabled.checked };
   const ack = (await chrome.runtime.sendMessage(message)) as Ack;
-  if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission', false);
+  if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission');
   await refresh();
 }
 
@@ -106,10 +107,16 @@ function render(): void {
   el.micEnabled.disabled = recording || busy;
 
   if (current.error) {
-    showError(current.error.message, current.error.code === 'mic-permission', current.sessionId !== null);
+    showError(current.error.message, current.error.code === 'mic-permission');
   } else {
     hideError();
   }
+
+  const canRetry = current.sessionId !== null && (current.status === 'error' || current.status === 'done');
+  el.retry.hidden = !canRetry;
+  // Le petit texte « transcription précédente disponible » ne sert qu'au cas
+  // nominal (succès sans erreur) : l'erreur elle-même l'explique déjà sinon.
+  el.history.hidden = !(canRetry && current.status === 'done' && current.error === null);
 
   if (recording && current.startedAt !== null) {
     el.timer.textContent = formatTimestamp((Date.now() - current.startedAt) / 1000);
@@ -136,17 +143,15 @@ function statusLabel(current: SessionState): string {
   }
 }
 
-function showError(message: string, micPermission: boolean, canRetry: boolean): void {
+function showError(message: string, micPermission: boolean): void {
   el.error.hidden = false;
   el.error.textContent = message;
   el.grantMic.hidden = !micPermission;
-  el.retry.hidden = !canRetry;
 }
 
 function hideError(): void {
   el.error.hidden = true;
   el.grantMic.hidden = true;
-  el.retry.hidden = true;
 }
 
 function hostOf(url: string): string {

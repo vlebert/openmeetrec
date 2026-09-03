@@ -6,6 +6,13 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Ajouté
+
+- Bouton « Reprocess transcription » dans le popup : tant qu'aucun nouvel enregistrement n'a
+  démarré, une session déjà terminée avec succès peut être retraitée (les chunks sont encore en
+  OPFS), pas seulement une session en échec. Un petit texte « Previous recording available »
+  l'indique quand on rouvre le popup sur une session déjà terminée.
+
 ## [0.5.0] - 2026-09-03
 
 ### Corrigé
