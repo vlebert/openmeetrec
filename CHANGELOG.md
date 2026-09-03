@@ -6,6 +6,8 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+## [0.6.0] - 2026-09-03
+
 ### Ajouté
 
 - Bouton « Reprocess transcription » dans le popup : tant qu'aucun nouvel enregistrement n'a
