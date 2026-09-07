@@ -8,6 +8,8 @@ OpenAI Whisper) and exports the result as Markdown.
 No bot joining the call, no mandatory cloud service, no network request you didn't
 trigger yourself.
 
+[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/openmeetrec/djfhjbamifmdfndaekdaigmlhdblhaif)
+
 <img src="docs/screenshot.png" alt="OpenMeetRec popup while recording a meeting" width="320">
 
 ## Why
