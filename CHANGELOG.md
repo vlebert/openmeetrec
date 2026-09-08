@@ -1,163 +1,157 @@
 # Changelog
 
-Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versionnage
-[SemVer](https://semver.org/lang/fr/). Les changements en cours s'accumulent dans « Non publié »
-jusqu'à la version suivante.
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned with
+[SemVer](https://semver.org/). Ongoing changes accumulate under "Unreleased" until the next
+version.
 
-## [Non publié]
+## [Unreleased]
 
-### Ajouté
+### Added
 
-- **Transcription en une seule requête** quand l'enregistrement tient dans les limites du provider.
-  L'intérêt n'est pas la vitesse mais la diarization : une seule passe attribue les locuteurs sur
-  toute la réunion, là où le découpage les réattribuait à chaque chunk. L'export nomme donc à
-  nouveau les locuteurs (`**Speaker 0**`) et annonce `speakers: N`. Mesuré contre l'API Mistral :
-  1 h 29 min passent en une requête, transcrites à 99,9 % de leur durée.
-- Repli automatique sur le découpage en chunks : soit d'emblée, quand la durée ou la taille
-  dépassent les limites du provider — la décision se prend alors avant tout envoi, pour qu'un
-  dépassement ne coûte jamais plusieurs minutes d'upload perdues — soit après un échec que le
-  découpage peut résoudre. Une clé invalide ou un quota épuisé ne déclenchent pas ce repli : les
-  rejouer une fois par chunk ne ferait que brûler des requêtes.
+- **Single-request transcription** when the recording fits within the provider's limits. The point
+  is not speed but diarization: a single pass assigns speakers across the whole meeting, whereas
+  chunking re-attributed them for every chunk. The export therefore names speakers again
+  (`**Speaker 0**`) and reports `speakers: N`. Measured against the Mistral API: 1 h 29 min goes
+  through in a single request, transcribed at 99.9% of its duration.
+- Automatic fallback to chunking: either upfront, when duration or size exceed the provider's
+  limits — the decision is then made before any upload, so an overage never costs several minutes
+  of wasted upload — or after a failure that chunking can resolve. An invalid key or an exhausted
+  quota does not trigger this fallback: replaying it once per chunk would only burn requests.
 
-- `npm run test:one-shot` : sonde manuelle qui envoie un enregistrement entier en une seule
-  requête, rapporte l'acceptation ou le refus avec le corps d'erreur du provider, et vérifie que
-  la transcription couvre bien toute la durée — une API peut accepter un fichier trop long et n'en
-  transcrire que le début sans lever d'erreur. `npm run test:real-api` ne lance plus que le chemin
-  chunké.
-- `src/providers/limits.ts` : limites d'envoi par provider et par modèle, mesurées contre les
-  vraies API plutôt que reprises de leur documentation (celle de Mistral se contredit : 60 min sur
-  une page, 3 h sur une autre). C'est ce qui décidera, avant tout appel réseau, entre une requête
-  unique et du chunking.
+- `npm run test:one-shot`: manual probe that sends an entire recording in a single request, reports
+  acceptance or rejection along with the provider's error body, and checks that the transcription
+  actually covers the full duration — an API may accept an overly long file and transcribe only its
+  beginning without raising an error. `npm run test:real-api` now only runs the chunked path.
+- `src/providers/limits.ts`: upload limits per provider and per model, measured against the real
+  APIs rather than taken from their documentation (Mistral's contradicts itself: 60 min on one
+  page, 3 h on another). This is what will decide, before any network call, between a single
+  request and chunking.
 
-### Modifié
+### Changed
 
-- La piste audio continue est désormais **toujours** enregistrée, plus seulement quand l'option
-  « télécharger l'audio » est cochée : c'est elle qui rend possible la transcription en une seule
-  requête, et elle ne peut pas être reconstituée après coup à partir des chunks. L'option
-  utilisateur ne gouverne plus que la sortie du fichier audio.
-- Les identifiants de locuteurs des providers sont normalisés à l'affichage : Voxtral renvoie
-  `speaker_1`, l'export sortait donc `**speaker_1**` en minuscules au lieu de `**Speaker 1**`.
+- The continuous audio track is now **always** recorded, not only when the "download audio" option
+  is checked: it is what makes single-request transcription possible, and it cannot be
+  reconstructed afterwards from the chunks. The user option now only governs the audio file output.
+- Speaker identifiers from providers are normalized for display: Voxtral returns `speaker_1`, the
+  export used to output `**speaker_1**` in lowercase instead of `**Speaker 1**`.
 
-- Export markdown, transcription issue de plusieurs chunks : les libellés « Speaker N » ne sont plus
-  affichés. Ils étaient trompeurs — le provider attribue les identités indépendamment pour chaque
-  chunk, donc « Speaker 0 » avant et après une frontière n'est pas la même personne, et un
-  avertissement en tête de fichier ne suffit pas à s'en souvenir au milieu du document. La
-  diarization ne sert plus qu'à la mise en forme : un paragraphe par tour de parole, préfixé de son
-  timestamp `(HH:MM:SS)`. Les anciens intertitres `**Chunk N**` sont remplacés par une règle `---`,
-  qui signale la couture sans exposer de notion interne.
-- Le frontmatter n'annonce plus `speakers: N` dans ce cas : le compte additionnait des identifiants
-  locaux à chaque chunk.
-- Quand toute la transcription tient en **une seule requête**, rien ne change : les identités sont
-  cohérentes de bout en bout, les libellés `**Speaker N**` et le compte `speakers:` sont conservés.
+- Markdown export, transcription produced from multiple chunks: the "Speaker N" labels are no
+  longer displayed. They were misleading — the provider attributes identities independently for
+  each chunk, so "Speaker 0" before and after a boundary is not the same person, and a warning at
+  the top of the file is not enough to keep in mind in the middle of the document. Diarization is
+  now only used for formatting: one paragraph per speaking turn, prefixed with its timestamp
+  `(HH:MM:SS)`. The former `**Chunk N**` subheadings are replaced by a `---` rule, which marks the
+  seam without exposing an internal notion.
+- The frontmatter no longer reports `speakers: N` in that case: the count was adding up identifiers
+  local to each chunk.
+- When the whole transcription fits in a **single request**, nothing changes: identities are
+  consistent from start to end, the `**Speaker N**` labels and the `speakers:` count are kept.
 
 ## [0.6.0] - 2026-09-03
 
-### Ajouté
+### Added
 
-- Bouton « Reprocess transcription » dans le popup : tant qu'aucun nouvel enregistrement n'a
-  démarré, une session déjà terminée avec succès peut être retraitée (les chunks sont encore en
-  OPFS), pas seulement une session en échec. Un petit texte « Previous recording available »
-  l'indique quand on rouvre le popup sur une session déjà terminée.
+- "Reprocess transcription" button in the popup: as long as no new recording has started, a session
+  that already completed successfully can be reprocessed (the chunks are still in OPFS), not only a
+  failed session. A small "Previous recording available" text indicates this when the popup is
+  reopened on a completed session.
 
 ## [0.5.0] - 2026-09-03
 
-### Corrigé
+### Fixed
 
-- Un chunk sans parole (silence) faisait perdre les timestamps de toute la réunion, avec
-  l'avertissement « The model in use does not return timestamps », alors que les autres chunks en
-  avaient bien. Confirmé contre l'API Voxtral : un chunk de silence renvoie légitimement
-  `segments: []`. Ce chunk ne contribue désormais rien au merge au lieu de dégrader tout le
-  document en concaténation brute.
+- A chunk with no speech (silence) caused the timestamps of the whole meeting to be lost, with the
+  warning "The model in use does not return timestamps", even though the other chunks did have
+  them. Confirmed against the Voxtral API: a silent chunk legitimately returns `segments: []`. That
+  chunk now contributes nothing to the merge instead of degrading the whole document into raw
+  concatenation.
 
-### Modifié
+### Changed
 
-- Chunking par défaut : 3 min / overlap 10 s (au lieu de 5 min / 30 s) — des chunks plus courts,
-  plus réactifs à transcrire au fil de l'enregistrement.
-- `npm run test:real-api` : détection de la durée de l'audio robuste aux fichiers webm de
-  MediaRecorder sans Cues/Duration dans l'en-tête (décodage complet au lieu de lire les métadonnées
-  du conteneur). Vérifie aussi que les timestamps renvoyés par le provider tombent bien dans les
-  bornes du chunk transcrit, au lieu de supposer silencieusement leur unité et leur référentiel.
-  Validé pour de vrai contre Mistral (diarization) et OpenAI.
+- Default chunking: 3 min / 10 s overlap (instead of 5 min / 30 s) — shorter chunks, more
+  responsive to transcribe as the recording goes.
+- `npm run test:real-api`: audio duration detection robust to MediaRecorder webm files without
+  Cues/Duration in the header (full decoding instead of reading container metadata). Also checks
+  that the timestamps returned by the provider fall within the bounds of the transcribed chunk,
+  instead of silently assuming their unit and reference frame. Actually validated against Mistral
+  (diarization) and OpenAI.
 
 ## [0.4.0] - 2026-09-01
 
-### Ajouté
+### Added
 
-- Rappel d'enregistrement : à l'ouverture d'une page reconnue comme une visioconférence, une
-  notification système rappelle de lancer la capture. Rien n'est enregistré automatiquement — le
-  départ reste un clic sur l'icône de l'extension, seul geste qui accorde l'autorisation de
-  capturer l'onglet.
-- Réglages « Meeting reminder » : la liste des URLs de visio (Meet, Teams, Zoom, Jitsi, Whereby,
-  Webex…) est pré-remplie et entièrement éditable — une ligne par motif, `*` comme joker. Retirer
-  une ligne suffit à ne plus être rappelé sur ce site ; l'option se désactive en entier par une
-  case à cocher.
+- Recording reminder: when opening a page recognized as a video call, a system notification
+  reminds to start the capture. Nothing is recorded automatically — starting remains a click on
+  the extension icon, the only gesture that grants the permission to capture the tab.
+- "Meeting reminder" settings: the list of meeting URLs (Meet, Teams, Zoom, Jitsi, Whereby,
+  Webex…) is pre-filled and fully editable — one pattern per line, `*` as wildcard. Removing a line
+  is enough to stop being reminded on that site; the whole option is disabled with a checkbox.
 
-### Modifié
+### Changed
 
-- Nouvelles permissions `tabs` et `notifications`, requises par le rappel ci-dessus : `tabs` parce
-  que Chrome retire l'URL des onglets sans elle, `notifications` pour afficher le rappel. Les URLs
-  sont comparées aux motifs puis jetées — jamais stockées ni envoyées. Voir
+- New `tabs` and `notifications` permissions, required by the reminder above: `tabs` because
+  Chrome removes tab URLs without it, `notifications` to display the reminder. URLs are compared
+  against the patterns then discarded — never stored nor sent. See
   `docs/permissions-audit.md`.
 
 ## [0.3.0] - 2026-08-30
 
-### Ajouté
+### Added
 
-- Bouton « Retry transcription » dans le popup : après un échec (réseau, clé, overload API), les
-  chunks restent en OPFS et le pipeline complet peut être relancé sur la même session, sans
-  réenregistrer.
-- `npm run test:real-api` : validation manuelle du pipeline contre une vraie API (Mistral/OpenAI),
-  hors CI et hors `npm test` — découpe un fichier audio réel en chunks via `ffmpeg`, clé API et
-  fichier audio fournis par variables d'environnement, jamais commités.
+- "Retry transcription" button in the popup: after a failure (network, key, API overload), the
+  chunks remain in OPFS and the full pipeline can be re-run on the same session, without
+  re-recording.
+- `npm run test:real-api`: manual validation of the pipeline against a real API (Mistral/OpenAI),
+  outside CI and outside `npm test` — splits a real audio file into chunks via `ffmpeg`, API key
+  and audio file provided through environment variables, never committed.
 
-### Modifié
+### Changed
 
-- Transcription diarizée : les segments consécutifs d'un même speaker sont désormais regroupés en
-  un seul paragraphe (un tour de parole), au lieu d'un paragraphe par segment brut renvoyé par
-  l'API (~10s). Le regroupement s'arrête à chaque frontière de chunk, car les identifiants de
-  speaker ne sont pas appariés d'un chunk à l'autre.
+- Diarized transcription: consecutive segments from the same speaker are now grouped into a single
+  paragraph (one speaking turn), instead of one paragraph per raw segment returned by the API
+  (~10s). Grouping stops at each chunk boundary, because speaker identifiers are not matched from
+  one chunk to the next.
 
-### Corrigé
+### Fixed
 
-- `downloadAndWait` restait bloqué indéfiniment quand le fichier téléchargé était minuscule (ex.
-  transcription totalement échouée) : le téléchargement se terminait parfois avant que le listener
-  `chrome.downloads.onChanged` ne soit posé. L'état courant du téléchargement est maintenant vérifié
-  en plus des évènements futurs.
+- `downloadAndWait` would block forever when the downloaded file was tiny (e.g. a fully failed
+  transcription): the download sometimes completed before the `chrome.downloads.onChanged` listener
+  was attached. The current download state is now checked in addition to future events.
 
 ## [0.2.0] - 2026-08-29
 
-Première version numérotée. Tout ce qui précède s'est accumulé sous « Non publié » depuis le
-scaffolding : la chaîne complète enregistrement → transcription → export tient debout dans
-Chromium, mais n'a encore jamais vu une vraie API ni une vraie visioconférence.
+First numbered release. Everything before it had accumulated under "Unreleased" since scaffolding:
+the full recording → transcription → export chain stands in Chromium, but had never yet seen a
+real API or a real video call.
 
-### Ajouté
+### Added
 
-- PRD et architecture (v0.3), audit des permissions.
-- Scaffolding : TypeScript strict, Vite, manifest MV3.
-- Chaîne de capture : popup → service worker → offscreen document, mix micro + onglet avec
-  ré-injection du son, chunks écrits en OPFS pendant l'enregistrement.
-- Transcription : providers Mistral / OpenAI / endpoint personnalisé, pipeline chunks → merge →
-  export Markdown, téléchargement en fin de session.
-- UI popup (start/stop, durée, niveaux) et page de réglages (fournisseur, clés, options), en anglais.
-- Badge « REC » sur l'icône de la barre d'outils pendant l'enregistrement, visible même popup fermé.
-- Icône de la barre d'outils au point rouge pendant l'enregistrement, au point gris au repos :
-  l'état se lit sans ouvrir le popup, et l'icône ne prétend plus enregistrer en permanence.
-- Avertissement et sections « Chunk N » dans le markdown exporté, pour signaler la rupture
-  d'identification des locuteurs entre chunks (non résolue en MVP).
-- Test d'intégration bout en bout dans Chromium (`npm run test:e2e`).
-- Logo : anneau ouvert en trois arcs autour d'un point central (`src/assets/logo.svg`), décliné en
-  icônes 16/32/48/128 déclarées dans le manifest.
+- PRD and architecture (v0.3), permissions audit.
+- Scaffolding: TypeScript strict, Vite, MV3 manifest.
+- Capture chain: popup → service worker → offscreen document, mic + tab mix with audio
+  re-injection, chunks written to OPFS during recording.
+- Transcription: Mistral / OpenAI / custom endpoint providers, chunks → merge → Markdown export
+  pipeline, download at the end of the session.
+- Popup UI (start/stop, duration, levels) and settings page (provider, keys, options), in English.
+- "REC" badge on the toolbar icon while recording, visible even with the popup closed.
+- Toolbar icon turning red while recording, grey at rest: the state can be read without opening
+  the popup, and the icon no longer pretends to record permanently.
+- Warning and "Chunk N" sections in the exported markdown, to flag the speaker-identity break
+  across chunks (unresolved in the MVP).
+- End-to-end integration test in Chromium (`npm run test:e2e`).
+- Logo: open ring in three arcs around a central dot (`src/assets/logo.svg`), declined into
+  16/32/48/128 icons declared in the manifest.
 
-### Modifié
+### Changed
 
-- Vumètres (micro/onglet) : passage d'une échelle RMS linéaire à une échelle en dB — une voix
-  normale restait quasi invisible sur la barre, l'oreille perçoit le volume de façon logarithmique.
-- Transcription exportée : le blockquote (`> …`) est retiré, la transcription est en markdown
-  simple — il n'apportait rien de plus qu'un formatage superflu.
+- VU meters (mic/tab): switched from a linear RMS scale to a dB scale — a normal voice stayed
+  nearly invisible on the bar, the ear perceives loudness logarithmically.
+- Exported transcription: the blockquote (`> …`) is removed, the transcription is plain markdown —
+  it added nothing beyond superfluous formatting.
 
-### Corrigé
+### Fixed
 
-- `npm run build` sur un dépôt fraîchement cloné : message d'erreur explicite quand
-  `node_modules/` est absent, au lieu d'un stack trace pointant sur le mauvais fichier.
-- Placeholder de la clé API dans les réglages : n'affichait `sk-…` pour tous les providers alors
-  que seul OpenAI utilise ce format (Mistral, par exemple, ne l'utilise pas).
+- `npm run build` on a freshly cloned repo: explicit error message when `node_modules/` is
+  missing, instead of a stack trace pointing at the wrong file.
+- API key placeholder in the settings: it displayed `sk-…` for all providers even though only
+  OpenAI uses that format (Mistral, for instance, does not).
