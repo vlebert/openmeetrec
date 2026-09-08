@@ -6,6 +6,8 @@ version.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-08
+
 ### Added
 
 - **Single-request transcription** when the recording fits within the provider's limits. The point
