@@ -21,16 +21,24 @@ Extension de navigateur OSS, **MVP Chromium uniquement** (Firefox hors scope, po
 - Unitaires : Vitest sur `tests/unit/`.
 - Intégration : `npm run test:e2e` — Playwright headful sur le display VNC existant (`DISPLAY=:1`)
   charge `dist-test/` (build de test) + la page fixture WebRTC `tests/integration/fixtures/meeting-page.html`.
-  Le build de test substitue deux modules (stratégie de capture, durées de chunk) ; le code de
-  production n'embarque rien de spécifique aux tests. `activeTab` étant impossible à obtenir par
-  automatisation, le vrai `chrome.tabCapture` reste vérifié à la main.
+  Le build de test substitue trois modules (stratégie de capture, durées de chunk, limites d'envoi
+  des providers) ; le code de production n'embarque rien de spécifique aux tests. `activeTab` étant
+  impossible à obtenir par automatisation, le vrai `chrome.tabCapture` reste vérifié à la main.
 - Sur cette machine : `OMR_CHROMIUM=~/.cache/ms-playwright/chromium-1232/chrome-linux64/chrome`,
   car la révision attendue par Playwright (1234) n'est pas installée et on ne retélécharge pas de
   navigateur pour deux révisions d'écart.
 - Firefox exploratoire : `firefox-mcp` (Firefox réel VNC) — voir `docs/testing-firefox.md` (à créer).
-- Validation manuelle contre une vraie API (Mistral/OpenAI) : `npm run test:real-api` —
-  `tests/manual/real-api.manual.ts`, jamais lancé par `npm test` ni par la CI (voir README). Clé API
-  et fichier audio viennent de variables d'environnement, jamais du dépôt.
+- Validation manuelle contre une vraie API (Mistral/OpenAI), jamais lancée par `npm test` ni par la
+  CI, et payante à chaque exécution (voir README) :
+  - `npm run test:real-api` (`tests/manual/real-api.manual.ts`) — chemin **chunké**.
+  - `npm run test:one-shot` (`tests/manual/one-shot.manual.ts`) — chemin **une seule requête**.
+  - **Les clés API sont dans `.env.local` à la racine du dépôt**, ignoré par la règle `.env.*` de
+    `.gitignore` : `set -a && . ./.env.local && set +a`. Ni dans `~/.config`, ni dans le profil shell.
+  - L'audio de test va dans `tests/manual/audio/` (ignoré). Il doit avoir le format que produit
+    `MediaRecorder` — webm « live », sans `Duration`, `Segment` de taille inconnue. Une conversion
+    ffmpeg ordinaire donne un fichier *seekable*, plus facile à accepter pour un serveur, donc un
+    test qui passe sans rien prouver : `-live 1` est obligatoire (recette dans le README).
+  - Les limites d'envoi mesurées par ces sondes vivent dans `src/providers/limits.ts`.
 - Ne pas ajouter de dépendance sans justification.
 
 ## Références

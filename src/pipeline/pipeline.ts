@@ -5,6 +5,8 @@
  */
 
 import { chunkBoundaries, mergeSegments, mergeTexts, segmentsToText } from '@/audio/merge';
+import { fitsInOneRequest, type TranscriptionLimits } from '@/providers/limits';
+import { shouldFallBackToChunks } from '@/providers/retry';
 import { DEFAULT_CONCURRENCY, mapLimitSettled } from '@/pipeline/concurrency';
 import type { TranscriptionProvider } from '@/providers/base';
 import type { ChunkInfo, Segment, TranscribeOpts } from '@/shared/types';
@@ -36,6 +38,57 @@ export interface TranscriptionOutcome {
   transcribedCount: number;
   /** Vide hors mode segments : les sections par chunk n'ont de sens qu'avec des timestamps. */
   chunkBoundaries: number[];
+}
+
+export interface SingleRequestRun {
+  /** Durée de l'enregistrement en secondes, pour la comparer aux limites. */
+  duration: number;
+  /** Piste continue de la session, ou `null` si elle n'a pas été écrite. */
+  loadTrack(): Promise<Blob | null>;
+  limits: TranscriptionLimits;
+  provider: TranscriptionProvider;
+  opts: TranscribeOpts;
+}
+
+/**
+ * Transcrit tout l'enregistrement en **une seule requête**.
+ *
+ * C'est le chemin nominal quand le provider l'accepte : une seule passe de
+ * diarization, donc des identités de speakers valables sur toute la réunion, là
+ * où le chunking les réattribue à chaque frontière et les rend inaffichables
+ * (cf. `shared/format.ts`, `hasGlobalSpeakers`).
+ *
+ * Renvoie `null` pour dire « replie-toi sur le chunking » : pas de piste, hors
+ * des limites, ou échec que le découpage peut résoudre. Les échecs que le
+ * découpage ne résoudra pas — clé invalide, quota épuisé — sont relancés tels
+ * quels : les rejouer une fois par chunk ne ferait que brûler des requêtes.
+ */
+export async function runSingleRequest(run: SingleRequestRun): Promise<TranscriptionOutcome | null> {
+  // La décision se prend sur la durée et la taille, connues avant l'appel : un
+  // dépassement de limite ne doit jamais coûter un upload de plusieurs minutes.
+  const track = await run.loadTrack();
+  if (!track) return null;
+  if (!fitsInOneRequest(run.limits, run.duration, track.size)) return null;
+
+  let result;
+  try {
+    result = await run.provider.transcribe(track, run.opts);
+  } catch (error) {
+    if (!shouldFallBackToChunks(error)) throw error;
+    return null;
+  }
+
+  const segments = result.segments ?? [];
+  return {
+    segments,
+    text: segments.length > 0 ? segmentsToText(segments) : result.text,
+    hadSegments: segments.length > 0,
+    failedChunks: [],
+    failures: [],
+    transcribedCount: 1,
+    // Aucune couture : c'est ce qui autorise l'export à nommer les speakers.
+    chunkBoundaries: [],
+  };
 }
 
 export async function runTranscription(run: TranscriptionRun): Promise<TranscriptionOutcome> {

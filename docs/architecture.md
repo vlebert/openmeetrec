@@ -426,14 +426,29 @@ speakers: 3
 extension_version: 0.1.0
 ---
 
-> **Speaker 0** (00:00:12): Bonjour, on commence la réunion…
->
-> **Speaker 1** (00:00:45): …
+**Speaker 0** (00:00:12): Bonjour, on commence la réunion…
+
+**Speaker 1** (00:00:45): …
 ```
 
-Sans diarization : un seul blockquote avec le texte continu (timestamps optionnels off en MVP).
-Avec diarization et plus d'un chunk, une note signale que les identités de speakers ne sont pas
-appariées entre chunks (PRD §6).
+Ci-dessus, le cas où toute la transcription tient en **une seule requête** : les `speaker_id`
+viennent d'une unique passe de diarization, ils sont donc cohérents sur tout le document et peuvent
+être nommés. `speakers: N` n'apparaît dans le frontmatter que dans ce cas.
+
+Dès qu'il y a **plusieurs chunks**, les identités ne survivent pas aux frontières (PRD §6). Les
+nommer serait mentir, donc l'export ne garde de la diarization que la mise en forme — un paragraphe
+par tour de parole, un timestamp en préfixe, et une règle `---` à chaque couture :
+
+```markdown
+(00:02:40) …et donc on valide ce point.
+
+---
+
+(00:02:55) Passons au sujet suivant.
+```
+
+Une note en tête de document explique la convention. Sans diarization : le texte continu, en un seul
+bloc.
 
 ## 7. Config (`chrome.storage.local`)
 

@@ -12,7 +12,7 @@ import { RUNTIME_CHUNK_OPTIONS } from '@/audio/chunkOptions';
 import { ChunkScheduler, type RecorderLike } from '@/audio/chunkScheduler';
 import { createMixer, type Mixer } from '@/audio/mix';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
-import { runTranscription } from '@/pipeline/pipeline';
+import { runSingleRequest, runTranscription } from '@/pipeline/pipeline';
 import { createProvider } from '@/providers/factory';
 import { resolveCapabilities } from '@/providers/registry';
 import type { TranscriptDocument } from '@/shared/format';
@@ -26,7 +26,7 @@ import {
   type ToOffscreenMessage,
   type ToWorkerMessage,
 } from '@/shared/messages';
-import type { Config, SessionMeta } from '@/shared/types';
+import type { Config, SessionMeta, TranscribeOpts } from '@/shared/types';
 import { audioDownload, markdownDownload } from '@/storage/export';
 import * as opfs from '@/storage/opfs';
 
@@ -83,20 +83,45 @@ async function runPipeline(sessionId: string, meta: SessionMeta, config: Config)
     const capabilities = resolveCapabilities(config);
     const provider = createProvider(config);
 
-    // Les bornes des chunks se recalculent : le scheduler suit exactement le
-    // même plan (`planChunks`), on n'a donc pas à les persister.
-    const present = new Set(await opfs.listChunks(sessionId));
-    const chunks = planChunks(meta.duration, RUNTIME_CHUNK_OPTIONS).filter((chunk) =>
-      present.has(chunk.index),
-    );
+    const opts: TranscribeOpts = {
+      model: config.model,
+      language: config.language,
+      diarize: capabilities.diarize,
+    };
 
-    const outcome = await runTranscription({
-      chunks,
+    // Chemin nominal : tout l'enregistrement en une seule requête, quand il
+    // tient dans les limites du provider. C'est ce qui donne des identités de
+    // speakers cohérentes sur toute la réunion (`shared/format.ts`).
+    let outcome = await runSingleRequest({
+      duration: meta.duration,
+      loadTrack: () => opfs.readTrack(sessionId),
+      limits: capabilities.limits,
       provider,
-      loadChunk: (chunk) => opfs.readChunk(sessionId, chunk.index),
-      opts: { model: config.model, language: config.language, diarize: capabilities.diarize },
-      onProgress: (done, total) => notify({ target: 'sw', type: 'PIPELINE_PROGRESS', done, total }),
+      opts,
     });
+
+    if (outcome) {
+      notify({ target: 'sw', type: 'PIPELINE_PROGRESS', done: 1, total: 1 });
+    } else {
+      // Repli : enregistrement trop long pour le provider, ou envoi unique en
+      // échec pour une raison que le découpage peut résoudre. Les chunks sont
+      // déjà en OPFS, il n'y a rien à réenregistrer.
+      //
+      // Les bornes des chunks se recalculent : le scheduler suit exactement le
+      // même plan (`planChunks`), on n'a donc pas à les persister.
+      const present = new Set(await opfs.listChunks(sessionId));
+      const chunks = planChunks(meta.duration, RUNTIME_CHUNK_OPTIONS).filter((chunk) =>
+        present.has(chunk.index),
+      );
+
+      outcome = await runTranscription({
+        chunks,
+        provider,
+        loadChunk: (chunk) => opfs.readChunk(sessionId, chunk.index),
+        opts,
+        onProgress: (done, total) => notify({ target: 'sw', type: 'PIPELINE_PROGRESS', done, total }),
+      });
+    }
 
     const doc: TranscriptDocument = {
       meta,

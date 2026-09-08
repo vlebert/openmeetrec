@@ -91,36 +91,72 @@ OMR_CHROMIUM=~/.cache/ms-playwright/chromium-1232/chrome-linux64/chrome DISPLAY=
 ### Validating against a real API (manual, outside CI)
 
 `npm test` and `npm run test:e2e` never call a real API: the project rule is a mock
-provider in CI, always. To occasionally check the pipeline against a real Mistral/OpenAI
-response, without paying on every `git push`, there's a separate manual script:
-`tests/manual/real-api.manual.ts`, run only via `npm run test:real-api`.
+provider in CI, always. Two manual scripts exist to check the pipeline against a real
+Mistral/OpenAI response. Neither is ever run by `npm test` or by CI, and both cost money
+on every run.
 
-It splits a real audio file (long enough to produce several chunks) with `ffmpeg`, sends
-each chunk to the provider you pick, checks that the returned segments have actual text
-and numeric timestamps that stay inside the chunk's bounds (catching absolute timestamps
-or a different unit, which would silently break reassembly), then writes the resulting
-Markdown to `test-results/` (git-ignored) for review. Nothing is committed, nothing is
-logged; the API key is only ever used in the HTTP header.
+| Script | File | Path under test |
+|---|---|---|
+| `npm run test:real-api` | `tests/manual/real-api.manual.ts` | **chunked** — splits the audio with `ffmpeg`, sends every chunk, checks that returned timestamps stay inside each chunk's bounds (an absolute timestamp or a different unit would silently break reassembly) |
+| `npm run test:one-shot` | `tests/manual/one-shot.manual.ts` | **single request** — sends the whole file, reports accept/refuse with the API's own error body, and asserts the transcript covers ≥98% of the audio (an API can accept an over-long file and transcribe only its beginning, without erroring) |
 
-The test audio file goes in `tests/manual/audio/` (git-ignored, kept in the repo just
-for path convenience). API keys stay out of the repo, e.g. in a file in your home
-directory:
+Both write the resulting Markdown to `test-results/` (git-ignored) for review. Nothing is
+committed, nothing is logged; the API key is only ever used in the HTTP header.
+
+#### API keys
+
+**Keys live in `.env.local` at the repository root**, git-ignored through the `.env.*`
+rule in `.gitignore`. Not in `~/.config`, not exported from your shell profile.
 
 ```bash
-# ~/.config/openmeetrec/test.env — never in the repo
-export MISTRAL_API_KEY=...   # or OPENAI_API_KEY, depending on provider
+# .env.local — git-ignored, never committed
+MISTRAL_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
 ```bash
-source ~/.config/openmeetrec/test.env
-export OMR_TEST_AUDIO=tests/manual/audio/long-recording.webm   # a few minutes, several chunks
-OMR_TEST_PROVIDER=mistral npm run test:real-api
-OMR_TEST_PROVIDER=openai npm run test:real-api
+set -a && . ./.env.local && set +a
+OMR_TEST_AUDIO=tests/manual/audio/meeting-40min.webm npm run test:one-shot
+OMR_TEST_PROVIDER=openai OMR_TEST_AUDIO=tests/manual/audio/short.webm npm run test:real-api
 ```
 
-Optional variables: `OMR_TEST_MODEL`, `OMR_TEST_DIARIZE=1`, `OMR_TEST_CHUNK_DURATION` /
-`OMR_TEST_OVERLAP` (seconds, useful to force multiple chunks on a shorter file without
-changing the product's own defaults), `OMR_TEST_ENDPOINT` (for the `custom` provider).
+Variables: `OMR_TEST_AUDIO` (required), `OMR_TEST_PROVIDER` (default `mistral`),
+`OMR_TEST_MODEL`, `OMR_TEST_ENDPOINT` (for the `custom` provider), and
+`OMR_TEST_CHUNK_DURATION` / `OMR_TEST_OVERLAP` (seconds — `test:real-api` only, useful to
+force several chunks out of a short file without touching the product's defaults).
+`OMR_TEST_DIARIZE` differs between the two: `=1` opts in for `test:real-api`, while
+`test:one-shot` diarizes by default and takes `=0` to opt out — consistent diarization is
+the whole point of the single-request path.
+
+#### Test audio must look like a real recording
+
+Test audio goes in `tests/manual/audio/` (git-ignored). It has to carry the quirks of what
+`MediaRecorder` produces, or the test validates something easier than what we ship: a
+**live** WebM, with no `Duration` in the header and a `Segment` of unknown size. A plain
+`ffmpeg` conversion writes a *seekable* file with a duration and a cue index, which a
+server may well accept where ours fails. `-live 1` is what reproduces it:
+
+```bash
+ffmpeg -i source.opus -vn -ac 1 -ar 48000 -c:a libopus -b:a 128k \
+       -map_metadata -1 -f webm -live 1 tests/manual/audio/meeting-40min.webm
+```
+
+Those settings match a real capture: Opus, 48 kHz, mono, ~131 kbps (≈58 MB/hour). Verify
+before trusting a result — `ffprobe -v error -show_entries format=duration -of csv=p=0 file`
+must print `N/A`, and `xxd -l 48 file` must show a `Segment` of unknown size
+(`1853 8067 01ff ffff ffff ffff`).
+
+#### Measured limits
+
+These probes are where `src/providers/limits.ts` gets its numbers, which in turn decide
+per provider and model whether a recording is sent in one request or chunked. Provider
+documentation is not reliable enough on its own — Mistral's "known limitations" page
+claims 60 minutes while its Transcribe 2 page claims 3 hours. Measured on 2026-09-08:
+
+| Provider / model | Result |
+|---|---|
+| `mistral` / `voxtral-mini-2602` (alias `voxtral-mini-latest`) | 1 h 29 min accepted in one request, 99.9% covered, no silent truncation. Speaker IDs come back as `speaker_N` strings |
+| `openai` / `whisper-1` | 17 s accepted; 37 MiB refused with `HTTP 413 — Maximum content size limit (26214400) exceeded`, i.e. exactly 25 MiB of multipart body |
 
 ## Design choices
 

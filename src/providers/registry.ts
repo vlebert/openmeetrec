@@ -6,6 +6,7 @@
  */
 
 import type { Config, ProviderId } from '@/shared/types';
+import { getLimits, type TranscriptionLimits } from '@/providers/limits';
 
 export interface ModelPreset {
   id: string;
@@ -67,6 +68,11 @@ export interface ResolvedCapabilities {
   supportsDiarization: boolean;
   /** Diarization effectivement demandée : option activée ET supportée. */
   diarize: boolean;
+  /**
+   * Limites d'envoi du couple provider/modèle retenu (`providers/limits.ts`).
+   * C'est ce qui décide, avant l'appel, entre une seule requête et du chunking.
+   */
+  limits: TranscriptionLimits;
 }
 
 /**
@@ -85,6 +91,7 @@ export function resolveCapabilities(config: Config): ResolvedCapabilities {
       supportsSegments: config.customSupportsSegments ?? false,
       supportsDiarization: config.customSupportsDiarization ?? false,
       diarize: config.diarize && (config.customSupportsDiarization ?? false),
+      limits: getLimits('custom', config.model),
     };
   }
 
@@ -94,5 +101,6 @@ export function resolveCapabilities(config: Config): ResolvedCapabilities {
     supportsSegments: model?.supportsSegments ?? false,
     supportsDiarization: preset.supportsDiarization,
     diarize: config.diarize && preset.supportsDiarization,
+    limits: getLimits(config.provider, config.model),
   };
 }

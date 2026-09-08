@@ -1,3 +1,4 @@
+import { DEFAULT_LIMITS } from '@/providers/limits';
 import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_PRESETS,
@@ -76,6 +77,8 @@ describe('resolveCapabilities', () => {
       supportsSegments: true,
       supportsDiarization: true,
       diarize: true,
+      // Endpoint inconnu : jamais de requête unique, toujours du chunking.
+      limits: DEFAULT_LIMITS,
     });
   });
 
@@ -86,6 +89,7 @@ describe('resolveCapabilities', () => {
       supportsSegments: false,
       supportsDiarization: false,
       diarize: false,
+      limits: DEFAULT_LIMITS,
     });
   });
 });

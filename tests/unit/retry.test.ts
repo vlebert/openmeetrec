@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '@/providers/base';
-import { computeBackoffMs, isRetryableStatus, withRetry } from '@/providers/retry';
+import { computeBackoffMs, isRetryableStatus, shouldFallBackToChunks, withRetry } from '@/providers/retry';
 
 const noSleep = () => Promise.resolve();
 
@@ -92,5 +92,29 @@ describe('withRetry', () => {
       { sleep, random: () => 1 },
     );
     expect(sleep).toHaveBeenCalledWith(1000);
+  });
+});
+
+describe('shouldFallBackToChunks', () => {
+  it('se replie sur un dépassement de taille ou de durée', () => {
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'too large', 413))).toBe(true);
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'bad request', 400))).toBe(true);
+  });
+
+  it('se replie sur une erreur réseau ou une erreur sans statut', () => {
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'network down'))).toBe(true);
+    expect(shouldFallBackToChunks(new Error('boom'))).toBe(true);
+  });
+
+  it('se replie sur un 5xx ou un rate limit : un envoi plus petit peut passer', () => {
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'oops', 500))).toBe(true);
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'slow down', 429))).toBe(true);
+  });
+
+  it('ne se replie pas sur une clé invalide ou un quota épuisé', () => {
+    // Rejouer ça une fois par chunk ne ferait que brûler des requêtes.
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'unauthorized', 401))).toBe(false);
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'payment required', 402))).toBe(false);
+    expect(shouldFallBackToChunks(new ProviderError('mistral', 'forbidden', 403))).toBe(false);
   });
 });

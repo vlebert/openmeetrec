@@ -144,7 +144,13 @@ async function startRecording(
       sessionId,
       grant,
       micEnabled: message.micEnabled,
-      keepFullTrack: config.downloadAudio,
+      // Toujours vrai : la piste continue est ce qui rend possible la
+      // transcription en une seule requête, donc des identités de speakers
+      // cohérentes. On ne peut pas la reconstituer après coup à partir des
+      // chunks (conteneurs webm autonomes et recouvrants), ni l'inverse sans
+      // réencoder — les deux enregistrements doivent donc tourner ensemble.
+      // `config.downloadAudio` ne gouverne plus que la sortie du fichier audio.
+      keepFullTrack: true,
     });
     if (!ack.ok) {
       await closeOffscreen();

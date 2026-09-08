@@ -19,6 +19,9 @@ const isTestBuild = process.env['OMR_TEST_BUILD'] === '1';
 const testAliases = {
   '@/capture/tabCaptureStrategy': local('tests/integration/fixtures/fakeCaptureStrategy.ts'),
   '@/audio/chunkOptions': local('tests/integration/fixtures/fastChunkOptions.ts'),
+  // Sans ça, le provider `custom` de l'e2e n'atteindrait jamais le chemin
+  // « une seule requête » : ses limites de production sont à zéro.
+  '@/providers/limits': local('tests/integration/fixtures/testLimits.ts'),
 };
 
 // Build MV3 : un bundle ESM par point d'entrée, sans hash (le manifest référence

@@ -92,7 +92,7 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 | F-TR-08 | Gestion d'erreur API : rate limit, timeout, retry avec backoff |
 | F-TR-09 | Provider mock intégré pour les tests (hors réseau) |
 
-**Limitation documentée — continuité des speakers :** les `speaker_id` sont attribués par le provider indépendamment pour chaque chunk. « Speaker 0 » du chunk 1 n'est donc pas nécessairement « Speaker 0 » du chunk 2. En MVP, aucun ré-appariement n'est tenté ; la limitation est signalée dans le markdown exporté dès que l'enregistrement dépasse un chunk et que la diarization est active.
+**Limitation documentée — continuité des speakers :** les `speaker_id` sont attribués par le provider indépendamment pour chaque chunk. « Speaker 0 » du chunk 1 n'est donc pas nécessairement « Speaker 0 » du chunk 2. Aucun ré-appariement n'est tenté. Plutôt que d'exporter un libellé qui serait faux, l'export **cesse de nommer les speakers** dès que la transcription vient de plusieurs chunks : la diarization n'y sert plus qu'à la mise en forme (un paragraphe par tour de parole). Les libellés ne réapparaissent que si toute la transcription tient en une seule requête, où les identités sont cohérentes de bout en bout.
 
 ## 7. Export
 
@@ -100,9 +100,10 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 |---|---|
 | F-EX-01 | Téléchargement d'un fichier **Markdown** à la fin |
 | F-EX-02 | Frontmatter : `model`, `provider`, `date`, `duration`, `platform` (hôte de l'onglet), `speakers` (si diarization), `extension_version` |
-| F-EX-03 | Corps : transcription dans un blockquote `>` |
-| F-EX-04 | Avec diarization : un blockquote par segment avec speaker + timestamp (`> **Speaker 0** (00:12:34): …`) |
-| F-EX-05 | Sans diarization : un seul blockquote avec le texte continu |
+| F-EX-03 | Corps : transcription en paragraphes markdown |
+| F-EX-04 | Diarization sur **une seule requête** : un paragraphe par tour de parole, speaker + timestamp (`**Speaker 0** (00:12:34): …`) |
+| F-EX-05 | Diarization sur **plusieurs chunks** : un paragraphe par tour de parole, **sans nom de speaker**, préfixé du timestamp (`(00:12:34) …`) ; une règle `---` marque chaque frontière de chunk |
+| F-EX-07 | Sans diarization : le texte continu, en un seul bloc |
 | F-EX-06 | Option paramètre : télécharger aussi le fichier audio `.webm` (défaut : markdown seul) |
 
 ## 8. Paramètres

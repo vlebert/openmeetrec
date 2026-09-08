@@ -6,6 +6,50 @@ jusqu'à la version suivante.
 
 ## [Non publié]
 
+### Ajouté
+
+- **Transcription en une seule requête** quand l'enregistrement tient dans les limites du provider.
+  L'intérêt n'est pas la vitesse mais la diarization : une seule passe attribue les locuteurs sur
+  toute la réunion, là où le découpage les réattribuait à chaque chunk. L'export nomme donc à
+  nouveau les locuteurs (`**Speaker 0**`) et annonce `speakers: N`. Mesuré contre l'API Mistral :
+  1 h 29 min passent en une requête, transcrites à 99,9 % de leur durée.
+- Repli automatique sur le découpage en chunks : soit d'emblée, quand la durée ou la taille
+  dépassent les limites du provider — la décision se prend alors avant tout envoi, pour qu'un
+  dépassement ne coûte jamais plusieurs minutes d'upload perdues — soit après un échec que le
+  découpage peut résoudre. Une clé invalide ou un quota épuisé ne déclenchent pas ce repli : les
+  rejouer une fois par chunk ne ferait que brûler des requêtes.
+
+- `npm run test:one-shot` : sonde manuelle qui envoie un enregistrement entier en une seule
+  requête, rapporte l'acceptation ou le refus avec le corps d'erreur du provider, et vérifie que
+  la transcription couvre bien toute la durée — une API peut accepter un fichier trop long et n'en
+  transcrire que le début sans lever d'erreur. `npm run test:real-api` ne lance plus que le chemin
+  chunké.
+- `src/providers/limits.ts` : limites d'envoi par provider et par modèle, mesurées contre les
+  vraies API plutôt que reprises de leur documentation (celle de Mistral se contredit : 60 min sur
+  une page, 3 h sur une autre). C'est ce qui décidera, avant tout appel réseau, entre une requête
+  unique et du chunking.
+
+### Modifié
+
+- La piste audio continue est désormais **toujours** enregistrée, plus seulement quand l'option
+  « télécharger l'audio » est cochée : c'est elle qui rend possible la transcription en une seule
+  requête, et elle ne peut pas être reconstituée après coup à partir des chunks. L'option
+  utilisateur ne gouverne plus que la sortie du fichier audio.
+- Les identifiants de locuteurs des providers sont normalisés à l'affichage : Voxtral renvoie
+  `speaker_1`, l'export sortait donc `**speaker_1**` en minuscules au lieu de `**Speaker 1**`.
+
+- Export markdown, transcription issue de plusieurs chunks : les libellés « Speaker N » ne sont plus
+  affichés. Ils étaient trompeurs — le provider attribue les identités indépendamment pour chaque
+  chunk, donc « Speaker 0 » avant et après une frontière n'est pas la même personne, et un
+  avertissement en tête de fichier ne suffit pas à s'en souvenir au milieu du document. La
+  diarization ne sert plus qu'à la mise en forme : un paragraphe par tour de parole, préfixé de son
+  timestamp `(HH:MM:SS)`. Les anciens intertitres `**Chunk N**` sont remplacés par une règle `---`,
+  qui signale la couture sans exposer de notion interne.
+- Le frontmatter n'annonce plus `speakers: N` dans ce cas : le compte additionnait des identifiants
+  locaux à chaque chunk.
+- Quand toute la transcription tient en **une seule requête**, rien ne change : les identités sont
+  cohérentes de bout en bout, les libellés `**Speaker N**` et le compte `speakers:` sont conservés.
+
 ## [0.6.0] - 2026-09-03
 
 ### Ajouté

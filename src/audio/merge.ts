@@ -127,9 +127,11 @@ export interface SpeakerTurn {
  * `chunkBoundaries` (cf. `chunkBoundaries` ci-dessus) empêche de fusionner deux
  * segments situés de part et d'autre d'une frontière de chunk : les speaker IDs
  * sont attribués indépendamment par chunk, donc "Speaker 0" avant et après une
- * frontière ne sont pas garantis être la même personne (cf. avertissement dans
- * `shared/format.ts`). Une frontière force donc un nouveau tour même si le
- * speakerId est identique.
+ * frontière ne sont pas garantis être la même personne. Une frontière force donc
+ * un nouveau tour même si le speakerId est identique. C'est aussi pour ça que
+ * l'export masque les libellés dès qu'il y a une couture (`shared/format.ts`,
+ * `hasGlobalSpeakers`) : la diarization n'y sert plus qu'à découper en
+ * paragraphes.
  */
 export function groupSegmentsBySpeaker(
   segments: readonly Segment[],

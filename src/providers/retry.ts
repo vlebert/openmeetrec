@@ -38,6 +38,22 @@ export function isRetryableStatus(status: number | undefined): boolean {
   return status >= 500 && status < 600;
 }
 
+/**
+ * Après l'échec d'un envoi en **une seule requête**, vaut-il la peine de
+ * recommencer en chunks ?
+ *
+ * Non pour une clé invalide, un accès refusé ou un quota épuisé : le chunking
+ * rejouerait exactement le même échec, une fois par chunk. Oui pour tout le
+ * reste — un dépassement de taille ou de durée (413, 400) est précisément ce
+ * que le découpage résout, et une erreur réseau peut passer sur un envoi plus
+ * petit.
+ */
+export function shouldFallBackToChunks(error: unknown): boolean {
+  if (!(error instanceof ProviderError)) return true;
+  if (error.status === undefined) return true; // réseau / timeout
+  return ![401, 402, 403].includes(error.status);
+}
+
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof ProviderError) return isRetryableStatus(error.status);
   return error instanceof Error;

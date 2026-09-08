@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { planChunks } from '@/audio/chunking';
-import { runTranscription } from '@/pipeline/pipeline';
+import { runSingleRequest, runTranscription } from '@/pipeline/pipeline';
 import { MockProvider } from '@/providers/mock';
+import { ProviderError } from '@/providers/base';
+import type { TranscriptionLimits } from '@/providers/limits';
 import type { TranscriptionProvider } from '@/providers/base';
 import type { ChunkInfo, TranscribeOpts } from '@/shared/types';
 
@@ -139,3 +141,99 @@ function emptyOnSize(size: number): TranscriptionProvider {
     testKey: async () => true,
   };
 }
+
+describe('runSingleRequest', () => {
+  const LIMITS: TranscriptionLimits = { maxSingleRequestSeconds: 3600, maxSingleRequestBytes: 10 * 1024 * 1024 };
+  /** 5 ko → le MockProvider produit 5 segments de 10 s. */
+  const loadTrack = async (): Promise<Blob> => new Blob(['x'.repeat(5 * 1024)]);
+
+  const failing = (error: unknown): TranscriptionProvider => ({
+    id: 'mock',
+    supportsSegments: true,
+    supportsDiarization: true,
+    testKey: async () => true,
+    transcribe: () => Promise.reject(error),
+  });
+
+  it('transcrit toute la piste en un appel, sans aucune couture', async () => {
+    const provider = new MockProvider();
+    const outcome = await runSingleRequest({ duration: 600, loadTrack, limits: LIMITS, provider, opts: OPTS });
+
+    expect(provider.calls).toBe(1);
+    expect(outcome?.transcribedCount).toBe(1);
+    expect(outcome?.hadSegments).toBe(true);
+    // Aucune couture : c'est ce qui autorise l'export à nommer les speakers.
+    expect(outcome?.chunkBoundaries).toEqual([]);
+    expect(outcome?.failedChunks).toEqual([]);
+  });
+
+  it('se replie sans piste continue', async () => {
+    const provider = new MockProvider();
+    const outcome = await runSingleRequest({
+      duration: 600,
+      loadTrack: async () => null,
+      limits: LIMITS,
+      provider,
+      opts: OPTS,
+    });
+
+    expect(outcome).toBeNull();
+    expect(provider.calls).toBe(0);
+  });
+
+  it('se replie sans dépenser de requête quand la durée dépasse la limite', async () => {
+    const provider = new MockProvider();
+    const outcome = await runSingleRequest({ duration: 3601, loadTrack, limits: LIMITS, provider, opts: OPTS });
+
+    expect(outcome).toBeNull();
+    // Le point du test : la décision se prend avant l'upload, pas après un
+    // refus payé en plusieurs minutes de transfert.
+    expect(provider.calls).toBe(0);
+  });
+
+  it('se replie sans dépenser de requête quand la taille dépasse la limite', async () => {
+    const provider = new MockProvider();
+    const outcome = await runSingleRequest({
+      duration: 600,
+      loadTrack,
+      limits: { ...LIMITS, maxSingleRequestBytes: 1024 },
+      provider,
+      opts: OPTS,
+    });
+
+    expect(outcome).toBeNull();
+    expect(provider.calls).toBe(0);
+  });
+
+  it('se replie sur un refus que le découpage peut résoudre (413)', async () => {
+    const outcome = await runSingleRequest({
+      duration: 600,
+      loadTrack,
+      limits: LIMITS,
+      provider: failing(new ProviderError('mock', 'too large', 413)),
+      opts: OPTS,
+    });
+
+    expect(outcome).toBeNull();
+  });
+
+  it('ne se replie pas sur une clé invalide : le chunking rejouerait le même échec', async () => {
+    await expect(
+      runSingleRequest({
+        duration: 600,
+        loadTrack,
+        limits: LIMITS,
+        provider: failing(new ProviderError('mock', 'unauthorized', 401)),
+        opts: OPTS,
+      }),
+    ).rejects.toThrow('unauthorized');
+  });
+
+  it('garde le texte brut quand le provider ne renvoie pas de segments', async () => {
+    const provider = new MockProvider({ segmentsDisabled: true });
+    const outcome = await runSingleRequest({ duration: 600, loadTrack, limits: LIMITS, provider, opts: OPTS });
+
+    expect(outcome?.hadSegments).toBe(false);
+    expect(outcome?.text.length).toBeGreaterThan(0);
+  });
+});

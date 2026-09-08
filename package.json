@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "build:test": "OMR_TEST_BUILD=1 node scripts/build.mjs",
     "test:e2e": "npm run build:test && DISPLAY=${DISPLAY:-:1} playwright test",
-    "test:real-api": "vitest run --config vitest.real-api.config.ts"
+    "test:real-api": "vitest run --config vitest.real-api.config.ts tests/manual/real-api.manual.ts",
+    "test:one-shot": "vitest run --config vitest.real-api.config.ts tests/manual/one-shot.manual.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

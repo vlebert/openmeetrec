@@ -101,16 +101,19 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   const markdown = await readDownload(ext.worker);
   expect(markdown).toContain('provider: custom');
   expect(markdown).toContain('platform: localhost');
-  expect(markdown).toContain('speakers: 2');
   expect(markdown).not.toContain('Transcription failed');
-  // Une section par chunk transcrit, pour rendre lisible le fait que la
-  // numérotation des speakers repart de zéro à chaque frontière. Le nombre de
-  // sections dépend de la distribution des segments près de la fin de la
-  // session (chunk final potentiellement très court) : on vérifie qu'il y en a
-  // plusieurs, pas un compte exact.
-  const chunkSections = [...markdown.matchAll(/\*\*Chunk \d+\*\*/g)];
-  expect(chunkSections.length).toBeGreaterThanOrEqual(2);
-  expect(markdown).toContain('**Chunk 1**');
+  // Transcription assemblée depuis plusieurs chunks : les identités de speakers
+  // repartent de zéro à chaque frontière, donc l'export ne les nomme pas et ne
+  // les compte pas — la diarization ne sert plus qu'à la mise en forme.
+  expect(markdown).not.toContain('speakers:');
+  expect(markdown).not.toMatch(/\*\*Speaker \d+\*\*/);
+  expect(markdown).toContain('Speakers are not named');
+  // Une règle par couture. Le compte exact dépend de la distribution des
+  // segments près de la fin de session (chunk final potentiellement très
+  // court) : on vérifie qu'il y en a plusieurs, pas un compte exact.
+  const seams = [...markdown.matchAll(/^---$/gm)];
+  // Deux règles du frontmatter, plus au moins une couture.
+  expect(seams.length).toBeGreaterThanOrEqual(3);
 
   // Le merge doit rendre une grille continue, sans doublon aux frontières de
   // chunks : c'est tout l'intérêt de la coupe au milieu de l'overlap (F-AUD-06).
@@ -207,12 +210,70 @@ test('reprend la transcription après un échec API, sans perdre les chunks (ret
   await popup.close();
 });
 
-async function configure(worker: Worker, endpoint: string): Promise<void> {
-  await worker.evaluate(async (url) => {
+/** Modèle factice dont `fixtures/testLimits.ts` autorise la requête unique. */
+const ONE_SHOT_MODEL = 'mock-one-shot';
+
+test('transcrit en une seule requête quand les limites du provider le permettent', async () => {
+  const callsBeforeSession = api.calls.length;
+
+  const meeting = await ext.context.newPage();
+  await meeting.goto(`${api.url}/meeting`);
+  await expect(meeting.locator('#state')).toHaveText('flux distant reçu');
+
+  const tabId = await ext.worker.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab?.id ?? -1;
+  });
+  expect(tabId).toBeGreaterThan(0);
+
+  await configure(ext.worker, `${api.url}/v1/audio/transcriptions`, ONE_SHOT_MODEL);
+
+  const popup = await ext.context.newPage();
+  await popup.goto(extensionUrl(ext.id, 'ui/popup.html'));
+
+  const started = await send(popup, {
+    target: 'sw',
+    type: 'START_RECORDING',
+    tabId,
+    url: `${api.url}/meeting`,
+    micEnabled: true,
+  });
+  expect(started).toEqual({ ok: true });
+
+  await popup.waitForTimeout(RECORDING_MS);
+  await send(popup, { target: 'sw', type: 'STOP_RECORDING' });
+
+  const state = await waitForDone(popup);
+  expect(state.status).toBe('done');
+  expect(state.error).toBeNull();
+
+  // Le point du test : un seul appel réseau, là où le chemin chunké en aurait
+  // émis EXPECTED_CHUNKS. C'est la piste continue qui est partie, d'un coup.
+  const calls = api.calls.slice(callsBeforeSession);
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.status).toBe(200);
+  // Nettement plus gros qu'un chunk : c'est bien toute la session.
+  expect(calls[0]?.bytes).toBeGreaterThan(0);
+
+  const markdown = await readLatestDownload(ext.worker);
+  // Une seule passe de diarization : les identités valent pour tout le
+  // document, donc l'export les nomme — contrairement au mode chunké.
+  expect(markdown).toMatch(/\*\*Speaker \d+\*\*/);
+  expect(markdown).toContain('speakers: 2');
+  expect(markdown).not.toContain('Speakers are not named');
+  // Aucune couture à signaler hors des deux tirets du frontmatter.
+  expect([...markdown.matchAll(/^---$/gm)]).toHaveLength(2);
+
+  await meeting.close();
+  await popup.close();
+});
+
+async function configure(worker: Worker, endpoint: string, model = 'mock-1'): Promise<void> {
+  await worker.evaluate(async ([url, modelId]) => {
     await chrome.storage.local.set({
       config: {
         provider: 'custom',
-        model: 'mock-1',
+        model: modelId,
         customEndpoint: url,
         customSupportsSegments: true,
         customSupportsDiarization: true,
@@ -222,7 +283,7 @@ async function configure(worker: Worker, endpoint: string): Promise<void> {
         language: null,
       },
     });
-  }, endpoint);
+  }, [endpoint, model]);
 }
 
 // Le popup est un contexte d'extension : c'est de là que part le messaging,

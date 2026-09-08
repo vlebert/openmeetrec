@@ -47,8 +47,17 @@ describe('formatSpeaker', () => {
     expect(formatSpeaker('0')).toBe('Speaker 0');
   });
 
+  it('normalise les formes des providers', () => {
+    // Voxtral renvoie `speaker_1`, constaté sur une vraie réponse d'API.
+    expect(formatSpeaker('speaker_1')).toBe('Speaker 1');
+    expect(formatSpeaker('SPEAKER_00')).toBe('Speaker 0');
+    expect(formatSpeaker('speaker 2')).toBe('Speaker 2');
+    expect(formatSpeaker('speaker-3')).toBe('Speaker 3');
+  });
+
   it('laisse un libellé déjà lisible', () => {
     expect(formatSpeaker('Alice')).toBe('Alice');
+    expect(formatSpeaker('speaker inconnu')).toBe('speaker inconnu');
   });
 
   it('gère l absence d identifiant', () => {
@@ -79,6 +88,18 @@ describe('buildFrontmatter', () => {
       ],
     });
     expect(buildFrontmatter(diarized)).toContain('speakers: 2');
+  });
+
+  it('ne compte pas les speakers quand la transcription vient de plusieurs chunks', () => {
+    const chunked = doc({
+      diarized: true,
+      chunkBoundaries: [100],
+      segments: [
+        { text: 'a', start: 0, end: 1, speakerId: '0' },
+        { text: 'b', start: 120, end: 121, speakerId: '0' },
+      ],
+    });
+    expect(buildFrontmatter(chunked)).not.toContain('speakers:');
   });
 
   it('cite une valeur contenant des caractères YAML', () => {
@@ -134,7 +155,7 @@ describe('buildBody', () => {
     expect(body).toBe('Un. Deux.');
   });
 
-  it('insère des sections de chunk quand des bornes sont fournies', () => {
+  it('masque les speakers et sépare les chunks par une règle quand il y a des bornes', () => {
     const body = buildBody(
       doc({
         diarized: true,
@@ -145,17 +166,49 @@ describe('buildBody', () => {
         ],
       }),
     );
-    expect(body).toBe(
-      [
-        '**Chunk 1**',
-        '',
-        '**Speaker 0** (00:00:00): Avant.',
-        '',
-        '**Chunk 2**',
-        '',
-        '**Speaker 0** (00:02:00): Après.',
-      ].join('\n'),
+    expect(body).toBe(['(00:00:00) Avant.', '', '---', '', '(00:02:00) Après.'].join('\n'));
+    expect(body).not.toContain('Speaker');
+    expect(body).not.toContain('Chunk');
+  });
+
+  it('garde un saut de paragraphe à chaque changement de speaker dans un chunk', () => {
+    const body = buildBody(
+      doc({
+        diarized: true,
+        chunkBoundaries: [1000],
+        segments: [
+          { text: 'Bonjour,', start: 12, end: 13, speakerId: '0' },
+          { text: 'ça va ?', start: 13, end: 15, speakerId: '0' },
+          { text: 'Bien merci.', start: 15, end: 17, speakerId: '1' },
+        ],
+      }),
     );
+    expect(body).toBe(['(00:00:12) Bonjour, ça va ?', '', '(00:00:15) Bien merci.'].join('\n'));
+  });
+
+  it('ne pose qu une règle même si un chunk entier n a produit aucun tour', () => {
+    const body = buildBody(
+      doc({
+        diarized: true,
+        chunkBoundaries: [100, 200],
+        segments: [
+          { text: 'Avant.', start: 0, end: 5, speakerId: '0' },
+          { text: 'Après.', start: 250, end: 255, speakerId: '0' },
+        ],
+      }),
+    );
+    expect(body.match(/^---$/gm)).toHaveLength(1);
+  });
+
+  it('ne commence jamais le corps par une règle', () => {
+    const body = buildBody(
+      doc({
+        diarized: true,
+        chunkBoundaries: [100],
+        segments: [{ text: 'Après.', start: 120, end: 125, speakerId: '0' }],
+      }),
+    );
+    expect(body).toBe('(00:02:00) Après.');
   });
 
   it('ne montre aucune section sans bornes de chunk', () => {
@@ -183,9 +236,13 @@ describe('buildWarnings', () => {
     expect(buildWarnings(doc({ hadSegments: false, chunkCount: 1 }))).toEqual([]);
   });
 
-  it('prévient que les speakers ne sont pas appariés entre chunks', () => {
-    const warnings = buildWarnings(doc({ diarized: true, chunkCount: 2 }));
-    expect(warnings.join(' ')).toContain('Speaker 0');
+  it('explique pourquoi les speakers ne sont pas nommés en transcription par chunks', () => {
+    const warnings = buildWarnings(doc({ diarized: true, chunkCount: 2, chunkBoundaries: [100] }));
+    expect(warnings.join(' ')).toContain('Speakers are not named');
+  });
+
+  it('ne dit rien des speakers quand la transcription tient en une requête', () => {
+    expect(buildWarnings(doc({ diarized: true, chunkCount: 1 }))).toEqual([]);
   });
 
   it('signale les chunks en échec', () => {
