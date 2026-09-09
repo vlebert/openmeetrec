@@ -143,7 +143,7 @@ describe('buildBody', () => {
     );
   });
 
-  it('recompose le texte depuis les segments quand la diarization est off', () => {
+  it('préfixe un timestamp aux segments quand la diarization est off', () => {
     const body = buildBody(
       doc({
         segments: [
@@ -152,7 +152,40 @@ describe('buildBody', () => {
         ],
       }),
     );
-    expect(body).toBe('Un. Deux.');
+    // Segments horodatés sans speaker : paragraphe préfixé, pas un mur de texte.
+    expect(body).toBe('(00:00:00) Un. Deux.');
+  });
+
+  it('coupe en paragraphes horodatés sur les fins de phrase espacées', () => {
+    const body = buildBody(
+      doc({
+        segments: [
+          { text: 'Première partie qui dure.', start: 0, end: 22 },
+          { text: 'Deuxième partie ensuite.', start: 22, end: 30 },
+        ],
+      }),
+    );
+    expect(body).toBe(['(00:00:00) Première partie qui dure.', '', '(00:00:22) Deuxième partie ensuite.'].join('\n'));
+  });
+
+  it('sépare les chunks par une règle même sans diarization', () => {
+    const body = buildBody(
+      doc({
+        chunkCount: 2,
+        chunkBoundaries: [100],
+        segments: [
+          { text: 'Avant la couture.', start: 0, end: 5 },
+          { text: 'Après la couture.', start: 120, end: 125 },
+        ],
+      }),
+    );
+    expect(body).toBe(['(00:00:00) Avant la couture.', '', '---', '', '(00:02:00) Après la couture.'].join('\n'));
+    expect(body).not.toContain('Speaker');
+  });
+
+  it('retombe sur le texte brut quand le modèle ne rend aucun timestamp', () => {
+    const body = buildBody(doc({ hadSegments: false, text: 'Bonjour tout le monde.' }));
+    expect(body).toBe('Bonjour tout le monde.');
   });
 
   it('masque les speakers et sépare les chunks par une règle quand il y a des bornes', () => {
@@ -248,6 +281,15 @@ describe('buildWarnings', () => {
   it('signale les chunks en échec', () => {
     const warnings = buildWarnings(doc({ failedChunks: [2, 5] }));
     expect(warnings.join(' ')).toContain('2, 5');
+  });
+
+  it('explique la règle --- pour un provider non-diarizant multi-chunks', () => {
+    const warnings = buildWarnings(doc({ diarized: false, hadSegments: true, chunkBoundaries: [100] }));
+    expect(warnings.join(' ')).toContain('`---` marks a boundary');
+  });
+
+  it('ne parle pas de couture quand tout tient en une requête', () => {
+    expect(buildWarnings(doc({ diarized: false, hadSegments: true }))).toEqual([]);
   });
 });
 

@@ -103,6 +103,70 @@ export function segmentsToText(segments: readonly Segment[]): string {
     .join(' ');
 }
 
+/** Paragraphe horodaté sans notion de speaker (garde le timestamp du 1er segment). */
+export interface Paragraph {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** Un paragraphe se clôt sur une fin de phrase dès qu'il dépasse cette durée. */
+const PARAGRAPH_MIN_SECONDS = 20;
+/** …ou dès qu'un silence dépasse ça, fin de phrase ou pas. */
+const PARAGRAPH_GAP_SECONDS = 2;
+const SENTENCE_END = /[.!?…]["'»)\]]?\s*$/;
+
+/**
+ * Regroupe des segments horodatés (sans diarization) en paragraphes lisibles :
+ * un paragraphe se ferme sur une fin de phrase une fois passé ~20 s, sur un
+ * silence de plus de 2 s, ou à une frontière de chunk. Sans ça, l'export d'un
+ * provider non-diarizant serait un mur de texte (ou, avec une seule requête, un
+ * unique paragraphe).
+ */
+export function groupSegmentsIntoParagraphs(
+  segments: readonly Segment[],
+  chunkBoundaries: readonly number[] = [],
+): Paragraph[] {
+  interface Open {
+    start: number;
+    end: number;
+    texts: string[];
+    boundaryIndex: number;
+  }
+
+  const open: Open[] = [];
+  let boundaryIndex = 0;
+
+  for (const seg of segments) {
+    const text = seg.text.trim();
+    while (boundaryIndex < chunkBoundaries.length && seg.start >= chunkBoundaries[boundaryIndex]!) {
+      boundaryIndex += 1;
+    }
+
+    const current = open[open.length - 1];
+    const closedBySentence =
+      current !== undefined &&
+      current.end - current.start >= PARAGRAPH_MIN_SECONDS &&
+      SENTENCE_END.test(current.texts[current.texts.length - 1] ?? '');
+    const sameParagraph =
+      current !== undefined &&
+      current.boundaryIndex === boundaryIndex &&
+      seg.start - current.end <= PARAGRAPH_GAP_SECONDS &&
+      !closedBySentence;
+
+    if (sameParagraph) {
+      current.end = seg.end;
+      if (text.length > 0) current.texts.push(text);
+    } else {
+      open.push({ start: seg.start, end: seg.end, texts: text.length > 0 ? [text] : [], boundaryIndex });
+    }
+  }
+
+  return open
+    .filter((p) => p.texts.length > 0)
+    .map(({ start, end, texts }) => ({ start, end, text: texts.join(' ') }));
+}
+
 /** Identifiants de speakers distincts rencontrés dans les segments. */
 export function countSpeakers(segments: readonly Segment[]): number {
   const ids = new Set<string>();

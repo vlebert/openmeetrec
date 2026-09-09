@@ -4,6 +4,7 @@ import {
   chunkBoundaries,
   countSpeakers,
   groupSegmentsBySpeaker,
+  groupSegmentsIntoParagraphs,
   mergeSegments,
   mergeTexts,
   segmentsToText,
@@ -178,6 +179,49 @@ describe('groupSegmentsBySpeaker', () => {
 
   it('renvoie une liste vide sans segment', () => {
     expect(groupSegmentsBySpeaker([])).toEqual([]);
+  });
+});
+
+describe('groupSegmentsIntoParagraphs', () => {
+  it('regroupe les segments rapprochés en un seul paragraphe', () => {
+    const paragraphs = groupSegmentsIntoParagraphs([
+      seg('Bonjour,', 0, 2),
+      seg('on démarre.', 2, 5),
+    ]);
+    expect(paragraphs).toEqual([{ start: 0, end: 5, text: 'Bonjour, on démarre.' }]);
+  });
+
+  it('ferme un paragraphe sur une fin de phrase une fois passé 20 s', () => {
+    const paragraphs = groupSegmentsIntoParagraphs([
+      seg('Un long passage qui court.', 0, 21),
+      seg('Nouvelle idée ici.', 21, 25),
+    ]);
+    expect(paragraphs.map((p) => p.start)).toEqual([0, 21]);
+  });
+
+  it('ne coupe pas au milieu d une phrase même longue', () => {
+    const paragraphs = groupSegmentsIntoParagraphs([
+      seg('Un long passage sans point', 0, 21),
+      seg('qui continue encore.', 21, 25),
+    ]);
+    expect(paragraphs).toHaveLength(1);
+  });
+
+  it('coupe sur un silence de plus de 2 s', () => {
+    const paragraphs = groupSegmentsIntoParagraphs([seg('Avant.', 0, 3), seg('Après.', 8, 10)]);
+    expect(paragraphs.map((p) => p.start)).toEqual([0, 8]);
+  });
+
+  it('force un nouveau paragraphe à chaque frontière de chunk', () => {
+    const paragraphs = groupSegmentsIntoParagraphs(
+      [seg('Avant.', 0, 3), seg('Après.', 4, 6)],
+      [3.5],
+    );
+    expect(paragraphs.map((p) => p.start)).toEqual([0, 4]);
+  });
+
+  it('ignore les segments vides', () => {
+    expect(groupSegmentsIntoParagraphs([seg('  ', 0, 1)])).toEqual([]);
   });
 });
 

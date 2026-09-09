@@ -6,6 +6,13 @@ version.
 
 ## [Unreleased]
 
+### Changed
+
+- Markdown export, provider without diarization (OpenAI, or Mistral with the option off) but with
+  timestamped segments: the transcript is now timestamped paragraphs (`(HH:MM:SS)` prefix, `---` at
+  each chunk boundary) instead of a single wall of text. The plain undelimited block is kept only as
+  a last resort, for a model that returns no timestamps at all.
+
 ## [0.7.0] - 2026-09-08
 
 ### Added

@@ -5,7 +5,12 @@
  */
 
 import type { Segment, SessionMeta } from '@/shared/types';
-import { countSpeakers, groupSegmentsBySpeaker, type SpeakerTurn } from '@/audio/merge';
+import {
+  countSpeakers,
+  groupSegmentsBySpeaker,
+  groupSegmentsIntoParagraphs,
+  type SpeakerTurn,
+} from '@/audio/merge';
 
 export interface TranscriptDocument {
   meta: SessionMeta;
@@ -108,6 +113,11 @@ export function buildWarnings(doc: TranscriptDocument): string[] {
         'and a speaker cannot be matched across a chunk boundary. Diarization is only ' +
         'used for layout — a blank line marks a change of speaker, `---` marks a boundary.',
     );
+  } else if (!doc.diarized && doc.hadSegments && (doc.chunkBoundaries ?? []).length > 0) {
+    warnings.push(
+      'This transcript was assembled from several chunks: `---` marks a boundary between ' +
+        'chunks. Timestamps are continuous across the whole recording.',
+    );
   }
   const failed = doc.failedChunks ?? [];
   if (failed.length > 0) {
@@ -121,19 +131,25 @@ export function buildWarnings(doc: TranscriptDocument): string[] {
 }
 
 export function buildBody(doc: TranscriptDocument): string {
-  if (doc.diarized && doc.segments && doc.segments.length > 0) {
-    const boundaries = doc.chunkBoundaries ?? [];
-    const turns = groupSegmentsBySpeaker(doc.segments, boundaries).filter((t) => t.text !== '');
-    return hasGlobalSpeakers(doc) ? namedTurns(turns) : anonymousTurns(turns, boundaries);
+  const segments = doc.segments ?? [];
+  const boundaries = doc.chunkBoundaries ?? [];
+
+  if (doc.diarized && segments.length > 0) {
+    const turns = groupSegmentsBySpeaker(segments, boundaries).filter((t) => t.text !== '');
+    return hasGlobalSpeakers(doc) ? namedTurns(turns) : timedBlocks(turns, boundaries);
   }
 
-  const text =
-    doc.text ??
-    (doc.segments ?? [])
-      .map((s) => s.text.trim())
-      .filter(Boolean)
-      .join(' ');
+  // Pas de diarization mais des segments horodatés (OpenAI, Mistral sans
+  // l'option…) : on garde
+  // les timestamps en préfixant chaque paragraphe, avec une règle `---` à chaque
+  // couture de chunk. Le bloc unique sans repère ne sert plus qu'au cas où le
+  // modèle ne renvoie aucun timestamp.
+  if (segments.length > 0) {
+    const paragraphs = groupSegmentsIntoParagraphs(segments, boundaries);
+    if (paragraphs.length > 0) return timedBlocks(paragraphs, boundaries);
+  }
 
+  const text = doc.text ?? segments.map((s) => s.text.trim()).filter(Boolean).join(' ');
   return text.trim();
 }
 
@@ -145,25 +161,29 @@ function namedTurns(turns: readonly SpeakerTurn[]): string {
 }
 
 /**
- * Même découpage en tours de parole, mais sans nommer personne : le changement
- * de speaker n'est plus qu'un saut de paragraphe, et chaque frontière de chunk
- * devient une règle horizontale. Le timestamp reste le seul repère pour
- * retrouver un passage dans l'audio.
+ * Blocs horodatés : un paragraphe par entrée, préfixé de son timestamp, et une
+ * règle horizontale à chaque frontière de chunk. Sert aussi bien aux tours de
+ * parole anonymisés (diarization sans identités globales) qu'aux paragraphes
+ * d'un provider non-diarizant — dans les deux cas le timestamp est le seul
+ * repère pour retrouver un passage dans l'audio.
  */
-function anonymousTurns(turns: readonly SpeakerTurn[], boundaries: readonly number[]): string {
+function timedBlocks(
+  entries: readonly { start: number; text: string }[],
+  boundaries: readonly number[],
+): string {
   const blocks: string[] = [];
   let crossed = 0;
 
-  for (const turn of turns) {
+  for (const entry of entries) {
     let seam = false;
-    while (crossed < boundaries.length && turn.start >= boundaries[crossed]!) {
+    while (crossed < boundaries.length && entry.start >= boundaries[crossed]!) {
       crossed += 1;
       seam = true;
     }
-    // Une seule règle même si un chunk entier n'a produit aucun tour, et jamais
-    // de règle en tête de document.
+    // Une seule règle même si un chunk entier n'a produit aucune entrée, et
+    // jamais de règle en tête de document.
     if (seam && blocks.length > 0) blocks.push('---');
-    blocks.push(`(${formatTimestamp(turn.start)}) ${turn.text}`);
+    blocks.push(`(${formatTimestamp(entry.start)}) ${entry.text}`);
   }
 
   return blocks.join('\n\n');

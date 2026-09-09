@@ -447,8 +447,13 @@ par tour de parole, un timestamp en préfixe, et une règle `---` à chaque cout
 (00:02:55) Passons au sujet suivant.
 ```
 
-Une note en tête de document explique la convention. Sans diarization : le texte continu, en un seul
-bloc.
+Une note en tête de document explique la convention.
+
+**Sans diarization** mais avec des segments horodatés (OpenAI, ou Mistral option décochée) : mêmes paragraphes horodatés
+`(HH:MM:SS)` et mêmes règles `---` aux coutures, simplement sans découpage par tour de parole
+(`groupSegmentsIntoParagraphs` : on ferme un paragraphe sur une fin de phrase passé ~20 s, sur un
+silence > 2 s, ou à une frontière de chunk). Le **bloc unique sans repère** ne sert plus que de
+dernier recours, quand le modèle ne renvoie aucun timestamp (`hadSegments === false`).
 
 ## 7. Config (`chrome.storage.local`)
 
