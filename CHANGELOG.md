@@ -6,6 +6,8 @@ version.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-10
+
 ### Changed
 
 - Markdown export, provider without diarization (OpenAI, or Mistral with the option off) but with
