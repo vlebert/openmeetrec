@@ -40,6 +40,20 @@ describe('manifest', () => {
     expect(manifest).not.toHaveProperty('content_scripts');
   });
 
+  /**
+   * Surtout PAS d'isolation cross-origin. Les clés `cross_origin_*` du manifest
+   * sont globales à **toutes** les pages de l'extension, offscreen document
+   * compris — or un document *cross-origin isolated* ne peut plus démarrer un
+   * flux `chrome.tabCapture` (« Error starting tab capture »). Les ajouter casse
+   * donc l'enregistrement pour tous les providers, alors que rien dans l'UI ne
+   * laisse deviner le lien. Piège déjà tombé une fois : ce test est là pour
+   * qu'il ne retombe pas.
+   */
+  it('n active jamais l isolation cross-origin (incompatible avec tabCapture)', () => {
+    expect(manifest).not.toHaveProperty('cross_origin_embedder_policy');
+    expect(manifest).not.toHaveProperty('cross_origin_opener_policy');
+  });
+
   it('ouvre le popup sur l onglet courant plutôt qu un onglet dédié', () => {
     expect(manifest.action.default_popup).toBe('ui/popup.html');
   });

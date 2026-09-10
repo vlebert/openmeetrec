@@ -114,6 +114,7 @@
 | `desktopCapture` | `tabCapture` avoids the system picker and full-screen access |
 | `identity`, `cookies`, `history`, `bookmarks` | Unrelated to the extension's function |
 | `storage.sync` | API keys must never leave the machine |
+| `cross_origin_embedder_policy` / `cross_origin_opener_policy` | These manifest keys are global to **every** extension page, offscreen document included, and a *cross-origin isolated* document can no longer start a `chrome.tabCapture` stream ("Error starting tab capture"). Setting them breaks recording for every provider, with nothing in the UI hinting at the connection. A unit test asserts they stay absent. |
 
 ## Verification
 
