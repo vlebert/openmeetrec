@@ -8,6 +8,7 @@ import {
   mergeSegments,
   mergeTexts,
   segmentsToText,
+  sortByStart,
 } from '@/audio/merge';
 import type { ChunkInfo, Segment } from '@/shared/types';
 
@@ -45,6 +46,12 @@ describe('mergeSegments', () => {
   it('sur un chunk unique, se contente d ajuster', () => {
     const chunks: ChunkInfo[] = [{ index: 0, start: 0, end: 100 }];
     expect(mergeSegments(chunks, [[seg('a', 0, 5)]])).toEqual([seg('a', 0, 5)]);
+  });
+
+  it('sur un chunk unique, trie aussi par début de segment', () => {
+    const chunks: ChunkInfo[] = [{ index: 0, start: 0, end: 100 }];
+    const merged = mergeSegments(chunks, [[seg('b', 13.8, 16, '2'), seg('a', 10, 14.2, '1')]]);
+    expect(merged.map((s) => s.text)).toEqual(['a', 'b']);
   });
 
   it('coupe au milieu du recouvrement et supprime les doublons', () => {
@@ -131,6 +138,20 @@ describe('segmentsToText / countSpeakers', () => {
   });
 });
 
+describe('sortByStart', () => {
+  it('ordonne par début, y compris des segments qui se chevauchent', () => {
+    // Voxtral 3 : deux speakers dont les segments se recouvrent de 0,4 s.
+    const sorted = sortByStart([seg('oui', 13.8, 16, '2'), seg('on valide', 10, 14.2, '1')]);
+    expect(sorted.map((s) => s.text)).toEqual(['on valide', 'oui']);
+  });
+
+  it('garde l ordre du provider à début égal et ne mute pas l entrée', () => {
+    const input = [seg('b', 5, 6), seg('a', 5, 7), seg('z', 1, 2)];
+    expect(sortByStart(input).map((s) => s.text)).toEqual(['z', 'b', 'a']);
+    expect(input.map((s) => s.text)).toEqual(['b', 'a', 'z']);
+  });
+});
+
 describe('groupSegmentsBySpeaker', () => {
   it('fusionne les segments consécutifs du même speaker en un tour de parole', () => {
     const turns = groupSegmentsBySpeaker([
@@ -177,6 +198,12 @@ describe('groupSegmentsBySpeaker', () => {
     expect(turns).toEqual([{ speakerId: '0', start: 0, end: 3, text: 'a b' }]);
   });
 
+  it('ne raccourcit pas un tour quand un segment chevauchant finit plus tôt', () => {
+    // Segments chevauchants (Voxtral 3) : le second commence et finit dans le premier.
+    const turns = groupSegmentsBySpeaker([seg('long', 0, 10, '0'), seg('court', 4, 6, '0')]);
+    expect(turns).toEqual([{ speakerId: '0', start: 0, end: 10, text: 'long court' }]);
+  });
+
   it('renvoie une liste vide sans segment', () => {
     expect(groupSegmentsBySpeaker([])).toEqual([]);
   });
@@ -218,6 +245,17 @@ describe('groupSegmentsIntoParagraphs', () => {
       [3.5],
     );
     expect(paragraphs.map((p) => p.start)).toEqual([0, 4]);
+  });
+
+  it('mesure le silence depuis la fin la plus tardive, pas depuis le dernier segment', () => {
+    // Sans le max, la fin retomberait à 4 s et l'écart avec 11 s (7 s) couperait
+    // le paragraphe, alors que le vrai silence après 10 s n'est que de 1 s.
+    const paragraphs = groupSegmentsIntoParagraphs([
+      seg('Un passage', 0, 10),
+      seg('chevauchant', 2, 4),
+      seg('et la suite', 11, 13),
+    ]);
+    expect(paragraphs).toEqual([{ start: 0, end: 13, text: 'Un passage chevauchant et la suite' }]);
   });
 
   it('ignore les segments vides', () => {

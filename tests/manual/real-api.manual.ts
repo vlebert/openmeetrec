@@ -47,8 +47,10 @@ function assertSegmentFormat(chunk: ChunkInfo, result: TranscriptionResult, expe
     if (!Number.isFinite(seg.start) || !Number.isFinite(seg.end)) {
       throw new Error(`chunk ${chunk.index} : timestamps non numériques (${JSON.stringify(seg)})`);
     }
-    if (seg.end <= seg.start) {
-      throw new Error(`chunk ${chunk.index} : end <= start (${JSON.stringify(seg)})`);
+    // Durée nulle tolérée : Voxtral 3 en renvoie pour des mots très brefs
+    // (« Ok. » de 102.2 à 102.2). Seule une durée négative trahirait un format cassé.
+    if (seg.end < seg.start) {
+      throw new Error(`chunk ${chunk.index} : end < start (${JSON.stringify(seg)})`);
     }
     if (seg.start < -TIMESTAMP_TOLERANCE_S || seg.end > chunkAudioDuration + TIMESTAMP_TOLERANCE_S) {
       throw new Error(

@@ -28,7 +28,13 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
     id: 'mistral',
     label: 'Mistral (Voxtral)',
     endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
-    models: [{ id: 'voxtral-mini-latest', label: 'Voxtral Mini', supportsSegments: true }],
+    // `voxtral-mini-latest` reste sur Transcribe 2 (`voxtral-mini-2602`) : Mistral
+    // n'a pas déplacé l'alias à la sortie de Voxtral 3, d'où des presets v3 explicites.
+    models: [
+      { id: 'voxtral-mini-latest', label: 'Voxtral Mini Transcribe 2', supportsSegments: true },
+      { id: 'voxtral-mini-transcribe-3', label: 'Voxtral Mini Transcribe 3', supportsSegments: true },
+      { id: 'voxtral-small-transcribe-3', label: 'Voxtral Small Transcribe 3', supportsSegments: true },
+    ],
     supportsDiarization: true,
   },
   {

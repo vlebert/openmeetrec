@@ -36,7 +36,9 @@ describe('presets', () => {
   });
 
   it('trouve un modèle par identifiant', () => {
-    expect(getModelPreset('mistral', 'voxtral-mini-latest')?.label).toBe('Voxtral Mini');
+    expect(getModelPreset('mistral', 'voxtral-mini-latest')?.label).toBe('Voxtral Mini Transcribe 2');
+    expect(getModelPreset('mistral', 'voxtral-mini-transcribe-3')?.label).toBe('Voxtral Mini Transcribe 3');
+    expect(getModelPreset('mistral', 'voxtral-small-transcribe-3')?.label).toBe('Voxtral Small Transcribe 3');
     expect(getModelPreset('mistral', 'inconnu')).toBeUndefined();
   });
 });

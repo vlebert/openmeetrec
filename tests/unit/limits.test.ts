@@ -12,6 +12,15 @@ describe('getLimits', () => {
     expect(getLimits('mistral', 'un-modele-jamais-vu')).toEqual(getLimits('mistral', 'voxtral-mini-latest'));
   });
 
+  it('plafonne Voxtral 3 à 45 min, sa fenêtre comptant la sortie', () => {
+    for (const model of ['voxtral-mini-transcribe-3', 'voxtral-small-transcribe-3']) {
+      const limits = getLimits('mistral', model);
+      expect(limits.maxSingleRequestSeconds).toBe(45 * 60);
+      expect(limits.contextTokens).toBe(65_536);
+    }
+    expect(getLimits('mistral', 'voxtral-mini-latest').contextTokens).toBeUndefined();
+  });
+
   it('interdit la requête unique sur un endpoint custom, dont on ignore les limites', () => {
     expect(getLimits('custom', 'local')).toEqual(DEFAULT_LIMITS);
   });
@@ -28,6 +37,12 @@ describe('fitsInOneRequest', () => {
 
   it('refuse chez Mistral au-delà du plafond de durée', () => {
     expect(fitsInOneRequest(mistral, 91 * 60, 10_000_000)).toBe(false);
+  });
+
+  it('refuse en Voxtral 3 les 1 h 25 mesurés comme tronqués en silence', () => {
+    const v3 = getLimits('mistral', 'voxtral-mini-transcribe-3');
+    expect(fitsInOneRequest(v3, 5100, 83_335_575)).toBe(false);
+    expect(fitsInOneRequest(v3, 2700, 44_765_021)).toBe(true);
   });
 
   it('accepte chez OpenAI un court extrait', () => {

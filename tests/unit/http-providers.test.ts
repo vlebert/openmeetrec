@@ -63,6 +63,58 @@ describe('providers HTTP', () => {
     expect(fields['timestamp_granularities[]']).toEqual(['segment']);
   });
 
+  it('rejette une réponse Voxtral 3 tronquée par une fenêtre de contexte pleine', async () => {
+    // Forme réelle mesurée sur 1 h 25 : HTTP 200, 5 min transcrites, rien d'autre
+    // que `total_tokens` pour le signaler.
+    const truncated = {
+      ...RESPONSE,
+      finish_reason: null,
+      usage: { prompt_audio_seconds: 5099, total_tokens: 65536, completion_tokens: 1781 },
+    };
+    const provider = new MistralProvider({
+      endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+      apiKey: 'k',
+      supportsSegments: true,
+      supportsDiarization: true,
+      fetchImpl: stubFetch(truncated) as unknown as typeof fetch,
+    });
+
+    const error = await provider
+      .transcribe(new Blob(['audio']), { ...OPTS, model: 'voxtral-mini-transcribe-3' })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ProviderError);
+    expect(String(error)).toContain('truncated');
+  });
+
+  it('accepte une réponse Voxtral 3 qui tient dans la fenêtre', async () => {
+    const complete = { ...RESPONSE, usage: { total_tokens: 47539 } };
+    const provider = new MistralProvider({
+      endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+      apiKey: 'k',
+      supportsSegments: true,
+      supportsDiarization: true,
+      fetchImpl: stubFetch(complete) as unknown as typeof fetch,
+    });
+
+    const result = await provider.transcribe(new Blob(['audio']), { ...OPTS, model: 'voxtral-small-transcribe-3' });
+    expect(result.text).toBe('ok');
+  });
+
+  it('ne juge pas Transcribe 2 sur la fenêtre de Voxtral 3', async () => {
+    // 1 h 29 en v2 : 67k tokens d'audio acceptés et transcrits en entier.
+    const v2 = { ...RESPONSE, usage: { total_tokens: 90_000 } };
+    const provider = new MistralProvider({
+      endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+      apiKey: 'k',
+      supportsSegments: true,
+      supportsDiarization: true,
+      fetchImpl: stubFetch(v2) as unknown as typeof fetch,
+    });
+
+    const result = await provider.transcribe(new Blob(['audio']), { ...OPTS, model: 'voxtral-mini-latest' });
+    expect(result.text).toBe('ok');
+  });
+
   it('porte la clé dans l’en-tête Authorization', async () => {
     const fetchImpl = stubFetch();
     const provider = new MistralProvider({

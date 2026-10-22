@@ -229,6 +229,27 @@ describe('runSingleRequest', () => {
     ).rejects.toThrow('unauthorized');
   });
 
+  it('rend les segments triés par début même si le provider ne les ordonne pas', async () => {
+    // Voxtral 3 : segments diarizés chevauchants, rien ne garantit leur ordre.
+    const provider: TranscriptionProvider = {
+      id: 'mock',
+      supportsSegments: true,
+      supportsDiarization: true,
+      testKey: async () => true,
+      transcribe: async () => ({
+        text: 'oui on valide',
+        segments: [
+          { text: 'oui', start: 13.8, end: 16, speakerId: 'speaker_2' },
+          { text: 'on valide', start: 10, end: 14.2, speakerId: 'speaker_1' },
+        ],
+      }),
+    };
+    const outcome = await runSingleRequest({ duration: 600, loadTrack, limits: LIMITS, provider, opts: OPTS });
+
+    expect(outcome?.segments.map((s) => s.start)).toEqual([10, 13.8]);
+    expect(outcome?.text).toBe('on valide oui');
+  });
+
   it('garde le texte brut quand le provider ne renvoie pas de segments', async () => {
     const provider = new MockProvider({ segmentsDisabled: true });
     const outcome = await runSingleRequest({ duration: 600, loadTrack, limits: LIMITS, provider, opts: OPTS });

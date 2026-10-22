@@ -151,11 +151,13 @@ must print `N/A`, and `xxd -l 48 file` must show a `Segment` of unknown size
 These probes are where `src/providers/limits.ts` gets its numbers, which in turn decide
 per provider and model whether a recording is sent in one request or chunked. Provider
 documentation is not reliable enough on its own — Mistral's "known limitations" page
-claims 60 minutes while its Transcribe 2 page claims 3 hours. Measured on 2026-09-08:
+claims 60 minutes while its Transcribe 2 page claims 3 hours. Measured on 2026-09-08 and
+2026-10-22:
 
 | Provider / model | Result |
 |---|---|
 | `mistral` / `voxtral-mini-2602` (alias `voxtral-mini-latest`) | 1 h 29 min accepted in one request, 99.9% covered, no silent truncation. Speaker IDs come back as `speaker_N` strings |
+| `mistral` / `voxtral-mini-transcribe-3`, `voxtral-small-transcribe-3` | 65,536-token context window **that includes the output**: 12.5 tokens per second of audio plus ~5 per second of transcript. 1 h 29 refused upfront (`HTTP 400 — Prompt 67130 > 65536 maximum context length`); 1 h 25 **accepted but silently truncated** after 5 min 18 (`total_tokens` = 65536, `finish_reason` null as on a complete response); 45 min covered 100%. Capped at 45 min, and a response that fills the window is rejected and re-run in chunks. Segments may have zero duration |
 | `openai` / `whisper-1` | 17 s accepted; 37 MiB refused with `HTTP 413 — Maximum content size limit (26214400) exceeded`, i.e. exactly 25 MiB of multipart body |
 
 ## Design choices

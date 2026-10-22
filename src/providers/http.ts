@@ -38,8 +38,15 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
 
   async transcribe(audio: Blob, opts: TranscribeOpts): Promise<TranscriptionResult> {
     const payload = await withRetry(() => this.post(this.options.endpoint, this.buildForm(audio, opts)));
+    this.checkPayload(payload, opts);
     return parseTranscription(payload);
   }
+
+  /**
+   * Rejette une réponse HTTP 200 inexploitable (ex. tronquée). Hors `withRetry` :
+   * rejouer la même requête donnerait la même réponse.
+   */
+  protected checkPayload(_payload: unknown, _opts: TranscribeOpts): void {}
 
   /**
    * Valide la clé sans consommer de crédit : `GET ../models` relativement à

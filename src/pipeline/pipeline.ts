@@ -4,7 +4,7 @@
  * MockProvider et sans navigateur.
  */
 
-import { chunkBoundaries, mergeSegments, mergeTexts, segmentsToText } from '@/audio/merge';
+import { chunkBoundaries, mergeSegments, mergeTexts, segmentsToText, sortByStart } from '@/audio/merge';
 import { fitsInOneRequest, type TranscriptionLimits } from '@/providers/limits';
 import { shouldFallBackToChunks } from '@/providers/retry';
 import { DEFAULT_CONCURRENCY, mapLimitSettled } from '@/pipeline/concurrency';
@@ -78,7 +78,7 @@ export async function runSingleRequest(run: SingleRequestRun): Promise<Transcrip
     return null;
   }
 
-  const segments = result.segments ?? [];
+  const segments = sortByStart(result.segments ?? []);
   return {
     segments,
     text: segments.length > 0 ? segmentsToText(segments) : result.text,

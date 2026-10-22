@@ -115,13 +115,19 @@ describe.skipIf(!canRun)('transcription en une seule requête', () => {
 
       const elapsed = (Date.now() - startedAt) / 1000;
       const segments = result.segments ?? [];
-      const covered = segments.at(-1)?.end ?? 0;
+      // Max plutôt que dernier segment : depuis Voxtral 3, les segments diarizés
+      // peuvent se chevaucher, le dernier de la liste n'est pas forcément celui
+      // qui finit le plus tard.
+      const covered = segments.reduce((max, seg) => Math.max(max, seg.end), 0);
+      const overlaps = segments.filter((seg, i) => i > 0 && seg.start < segments[i - 1]!.end).length;
+      const unsorted = segments.filter((seg, i) => i > 0 && seg.start < segments[i - 1]!.start).length;
       const speakers = countSpeakers(segments);
 
       console.log(
         `\nVERDICT : ACCEPTÉ en ${elapsed.toFixed(1)} s (${(duration / elapsed).toFixed(1)}× temps réel)\n` +
           `segments : ${segments.length}\n` +
           `speakers : ${speakers}\n` +
+          `chevauchements : ${overlaps} — hors ordre de start : ${unsorted}\n` +
           `couvert  : ${hms(covered)} / ${hms(duration)} (${((covered / duration) * 100).toFixed(1)} %)\n` +
           `texte    : ${result.text.length} caractères\n`,
       );

@@ -6,6 +6,31 @@ version.
 
 ## [Unreleased]
 
+### Added
+
+- Mistral **Voxtral 3** model presets: `voxtral-mini-transcribe-3` (Voxtral Mini Transcribe 3) and
+  `voxtral-small-transcribe-3` (Voxtral Small Transcribe 3, higher accuracy). The default model is
+  unchanged: `voxtral-mini-latest` still points to Transcribe 2 (`voxtral-mini-2602`) on Mistral's
+  side, and is now labelled "Voxtral Mini Transcribe 2".
+
+### Changed
+
+- Single-request transcription is capped at **45 minutes** with Voxtral 3 models, versus 1 h 30
+  with Transcribe 2. Voxtral 3 counts the transcript in its 65,536-token context window along with
+  the audio, so a long recording is either refused (1 h 29) or, worse, accepted and cut off without
+  any error (1 h 25 came back with only its first 5 minutes). Longer meetings are chunked, so
+  speaker labels are only consistent within each chunk.
+
+### Fixed
+
+- A Mistral response that fills the whole context window is now treated as truncated, and the
+  recording is transcribed again in chunks, instead of exporting an incomplete transcript as if it
+  were complete.
+- Segments are sorted by start time even when the whole meeting is sent in a single request.
+  Voxtral 3 may return overlapping diarized segments, and the export relied on the provider's order.
+  A segment that overlaps the previous one no longer shortens the speaking turn or paragraph it
+  belongs to.
+
 ## [0.8.0] - 2026-09-10
 
 ### Changed

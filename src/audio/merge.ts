@@ -57,7 +57,7 @@ export function mergeSegments(
     throw new Error('chunks et chunkResults doivent avoir la même longueur');
   }
   if (chunks.length === 0) return [];
-  if (chunks.length === 1) return adjustTimestamps(chunks[0]!, chunkResults[0]!);
+  if (chunks.length === 1) return sortByStart(adjustTimestamps(chunks[0]!, chunkResults[0]!));
 
   const merged: Segment[] = [];
 
@@ -74,8 +74,20 @@ export function mergeSegments(
     }
   }
 
-  merged.sort((a, b) => a.start - b.start);
-  return merged;
+  return sortByStart(merged);
+}
+
+/**
+ * Trie par début de segment, sans muter l'entrée (tri stable : à `start` égal,
+ * l'ordre du provider est conservé).
+ *
+ * Nécessaire même sans chunking : depuis Voxtral 3, les segments diarizés
+ * peuvent se chevaucher dans le temps, et rien ne garantit que l'API les rende
+ * dans l'ordre de leur début. Tout ce qui suit (regroupement en tours, en
+ * paragraphes, timestamps de l'export) suppose cet ordre.
+ */
+export function sortByStart(segments: readonly Segment[]): Segment[] {
+  return [...segments].sort((a, b) => a.start - b.start);
 }
 
 /**
@@ -155,7 +167,7 @@ export function groupSegmentsIntoParagraphs(
       !closedBySentence;
 
     if (sameParagraph) {
-      current.end = seg.end;
+      current.end = Math.max(current.end, seg.end);
       if (text.length > 0) current.texts.push(text);
     } else {
       open.push({ start: seg.start, end: seg.end, texts: text.length > 0 ? [text] : [], boundaryIndex });
@@ -220,7 +232,7 @@ export function groupSegmentsBySpeaker(
     const current = turns[turns.length - 1];
     const text = seg.text.trim();
     if (current && current.speakerId === seg.speakerId && current.chunkIndex === chunkIndex) {
-      current.end = seg.end;
+      current.end = Math.max(current.end, seg.end);
       if (text.length > 0) current.texts.push(text);
     } else {
       turns.push({ speakerId: seg.speakerId, start: seg.start, end: seg.end, texts: text ? [text] : [], chunkIndex });

@@ -25,9 +25,38 @@ export interface TranscriptionLimits {
   maxSingleRequestSeconds: number;
   /** Taille maximale du fichier envoyé en une seule requête, en octets. */
   maxSingleRequestBytes: number;
+  /**
+   * Fenêtre de contexte du modèle, en tokens, quand la **sortie** y est comptée
+   * avec l'audio. Une réponse qui la remplit est tronquée sans erreur : le
+   * provider s'en sert pour la rejeter (cf. `providers/mistral.ts`).
+   */
+  contextTokens?: number;
 }
 
 const MB = 1024 * 1024;
+
+/**
+ * Voxtral 3 (Mini et Small Transcribe 3). MESURÉ (2026-10-22) :
+ *
+ * - fenêtre de 65 536 tokens **sortie comprise** : 12,5 tokens par seconde
+ *   d'audio + ~5 tokens par seconde de texte transcrit (diarization incluse) ;
+ * - 1 h 29 refusé d'emblée (`Prompt 67130 > 65536 maximum context length`,
+ *   HTTP 400 → repli en chunks) ;
+ * - 1 h 25 **accepté mais tronqué en silence** : la transcription s'arrête à
+ *   5 min 18, `total_tokens` vaut 65 536 pile, `finish_reason` vaut `null`
+ *   comme sur une réponse complète ;
+ * - 45 min couverts à 100 % sur les deux modèles, 47,5k tokens consommés.
+ *
+ * Le plafond réel dépend donc du débit de parole (~62 min sur l'enregistrement
+ * mesuré). 45 min laissent ~×2 de marge sur la sortie, pour une réunion plus
+ * dense que celle mesurée. Au-delà, chunks : on y perd la cohérence des
+ * speakers sur toute la réunion, pas du texte.
+ */
+const VOXTRAL_3: TranscriptionLimits = {
+  maxSingleRequestSeconds: 45 * 60,
+  maxSingleRequestBytes: 500 * MB,
+  contextTokens: 65_536,
+};
 
 /**
  * Défaut volontairement nul : un endpoint dont on ne connaît pas les limites
@@ -59,6 +88,12 @@ const PROVIDER_LIMITS: Partial<Record<Exclude<ProviderId, 'mock'>, ProviderLimit
       // Transcribe 2. On garde la valeur basse : à ~131 kbps elle représente
       // déjà plus de 8 h d'audio, donc c'est la durée qui contraint, jamais elle.
       maxSingleRequestBytes: 500 * MB,
+    },
+    byModel: {
+      'voxtral-mini-transcribe-3': VOXTRAL_3,
+      'voxtral-mini-transcribe-3-0': VOXTRAL_3,
+      'voxtral-small-transcribe-3': VOXTRAL_3,
+      'voxtral-small-transcribe-3-0': VOXTRAL_3,
     },
   },
   openai: {
