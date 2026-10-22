@@ -6,6 +6,8 @@ version.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-22
+
 ### Added
 
 - Mistral **Voxtral 3** model presets: `voxtral-mini-transcribe-3` (Voxtral Mini Transcribe 3) and
