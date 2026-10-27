@@ -19,6 +19,7 @@ import {
   isForWorker,
   platformFromUrl,
   type Ack,
+  type CaptureAck,
   type DownloadRequest,
   type PipelineReport,
   type SessionError,
@@ -118,6 +119,13 @@ async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
     case 'CAPTURE_ERROR':
       await fail(message.error);
       return { ok: true };
+    case 'MIC_LOST': {
+      // L'enregistrement continue avec le son de l'onglet seul : on prévient
+      // plutôt que d'interrompre une réunion en cours.
+      const state = await readState();
+      if (state.status === 'recording' && state.mic) await writeState({ ...state, mic: { ...state.mic, lost: true } });
+      return { ok: true };
+    }
   }
 }
 
@@ -134,16 +142,18 @@ async function startRecording(
   }
 
   const sessionId = crypto.randomUUID();
+  let ack: CaptureAck;
   try {
     const grant = await new TabCaptureStrategy().requestGrant(message.tabId);
     const config = await loadConfig();
     await ensureOffscreen();
-    const ack = await sendToOffscreen({
+    ack = await sendToOffscreen({
       target: 'offscreen',
       type: 'START_CAPTURE',
       sessionId,
       grant,
       micEnabled: message.micEnabled,
+      micDeviceId: message.micDeviceId,
       // Toujours vrai : la piste continue est ce qui rend possible la
       // transcription en une seule requête, donc des identités de speakers
       // cohérentes. On ne peut pas la reconstituer après coup à partir des
@@ -173,6 +183,7 @@ async function startRecording(
     platform: platformFromUrl(message.url),
     startedAt: Date.now(),
     micEnabled: message.micEnabled,
+    mic: ack.mic ? { ...ack.mic, lost: false } : null,
   });
   return { ok: true };
 }
@@ -369,8 +380,8 @@ async function closeOffscreen(): Promise<void> {
   if (await hasOffscreen()) await chrome.offscreen.closeDocument();
 }
 
-async function sendToOffscreen(message: ToOffscreenMessage): Promise<Ack> {
-  const response = (await chrome.runtime.sendMessage(message)) as Ack | undefined;
+async function sendToOffscreen(message: ToOffscreenMessage): Promise<CaptureAck> {
+  const response = (await chrome.runtime.sendMessage(message)) as CaptureAck | undefined;
   return response ?? { ok: false, error: { code: 'internal', message: 'offscreen document did not respond' } };
 }
 

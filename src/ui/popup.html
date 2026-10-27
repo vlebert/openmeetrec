@@ -18,12 +18,19 @@
       <section class="meters" id="meters" hidden>
         <label>Mic <span class="bar"><span id="mic-level"></span></span></label>
         <label>Tab <span class="bar"><span id="tab-level"></span></span></label>
+        <p id="mic-name" class="mic-name" hidden></p>
+        <p id="mic-warning" class="warning" hidden></p>
       </section>
 
-      <label class="option" id="mic-option">
-        <input type="checkbox" id="mic-enabled" checked />
-        Also record my microphone
-      </label>
+      <section class="mic-option" id="mic-option">
+        <label class="option">
+          <input type="checkbox" id="mic-enabled" checked />
+          Also record my microphone
+        </label>
+        <select id="mic-device" aria-label="Microphone"></select>
+        <p id="mic-missing" class="warning" hidden>Saved microphone not found — the system default will be used.</p>
+        <p class="hint">Pick the same microphone as in your meeting.</p>
+      </section>
 
       <button id="toggle" type="button" disabled>Start</button>
 

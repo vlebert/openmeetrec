@@ -10,6 +10,7 @@
 import { planChunks } from '@/audio/chunking';
 import { RUNTIME_CHUNK_OPTIONS } from '@/audio/chunkOptions';
 import { ChunkScheduler, type RecorderLike } from '@/audio/chunkScheduler';
+import { micDisplayName } from '@/audio/micDevices';
 import { createMixer, type Mixer } from '@/audio/mix';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { runSingleRequest, runTranscription } from '@/pipeline/pipeline';
@@ -20,6 +21,7 @@ import {
   isForOffscreen,
   type Ack,
   type AudioLevels,
+  type CaptureAck,
   type DownloadRequest,
   type PipelineReport,
   type SessionError,
@@ -55,11 +57,10 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return true;
 });
 
-async function handle(message: ToOffscreenMessage): Promise<Ack | AudioLevels | PipelineReport> {
+async function handle(message: ToOffscreenMessage): Promise<Ack | CaptureAck | AudioLevels | PipelineReport> {
   switch (message.type) {
     case 'START_CAPTURE':
-      await startCapture(message);
-      return { ok: true };
+      return startCapture(message);
     case 'STOP_CAPTURE':
       await finish();
       return { ok: true };
@@ -153,7 +154,7 @@ async function runPipeline(sessionId: string, meta: SessionMeta, config: Config)
   }
 }
 
-async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_CAPTURE' }>): Promise<void> {
+async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_CAPTURE' }>): Promise<CaptureAck> {
   if (session) throw new CaptureError('already-recording', 'A recording is already in progress');
 
   await opfs.pruneSessions(message.sessionId);
@@ -163,11 +164,12 @@ async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_
   });
 
   let micStream: MediaStream | null = null;
+  let mic: CaptureAck['mic'];
   if (message.micEnabled) {
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      const opened = await openMic(message.micDeviceId);
+      micStream = opened.stream;
+      mic = { name: await describeMic(opened.stream), fallback: opened.fallback };
     } catch (error) {
       stopStream(tabStream);
       // L'offscreen document ne peut pas afficher de prompt : si l'autorisation
@@ -227,8 +229,53 @@ async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_
   const [track] = tabStream.getAudioTracks();
   if (track) track.addEventListener('ended', () => void finish());
 
+  // Micro débranché en cours de route : l'enregistrement continue avec le son
+  // de l'onglet, le popup affiche un avertissement.
+  const [micTrack] = micStream?.getAudioTracks() ?? [];
+  micTrack?.addEventListener('ended', () => {
+    if (!current.finishing) notify({ target: 'sw', type: 'MIC_LOST' });
+  });
+
   session = current;
   current.scheduler.start();
+  return { ok: true, ...(mic ? { mic } : {}) };
+}
+
+const MIC_PROCESSING = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+
+/**
+ * Ouvre le micro choisi, ou le défaut système. Un micro mémorisé mais débranché
+ * depuis ne doit pas empêcher d'enregistrer : on se replie sur le défaut, et
+ * l'interface le signale.
+ */
+async function openMic(deviceId: string | null): Promise<{ stream: MediaStream; fallback: boolean }> {
+  if (deviceId !== null) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { ...MIC_PROCESSING, deviceId: { exact: deviceId } },
+      });
+      return { stream, fallback: false };
+    } catch (error) {
+      if (!isMissingDevice(error)) throw error;
+    }
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_PROCESSING });
+  return { stream, fallback: deviceId !== null };
+}
+
+function isMissingDevice(error: unknown): boolean {
+  // Pas de `instanceof DOMException` : selon la version de Chromium,
+  // `OverconstrainedError` n'en hérite pas.
+  const name = (error as { name?: unknown } | null)?.name;
+  return name === 'OverconstrainedError' || name === 'NotFoundError';
+}
+
+async function describeMic(stream: MediaStream): Promise<string> {
+  const [track] = stream.getAudioTracks();
+  if (!track) return 'Unknown microphone';
+  const settings = track.getSettings();
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  return micDisplayName({ deviceId: settings.deviceId, groupId: settings.groupId, label: track.label }, devices);
 }
 
 /** Arrêt propre : chunks vidés, flux relâchés, service worker prévenu. */

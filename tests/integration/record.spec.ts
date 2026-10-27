@@ -51,6 +51,8 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
 
   const popup = await ext.context.newPage();
   await popup.goto(extensionUrl(ext.id, 'ui/popup.html'));
+  // Sélecteur de micro : le défaut système en tête, toujours présent.
+  await expect(popup.locator('#mic-device option').first()).toHaveText(/^System default/);
 
   const started = await send(popup, {
     target: 'sw',
@@ -58,6 +60,7 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
     tabId,
     url: `${api.url}/meeting`,
     micEnabled: true,
+    micDeviceId: null,
   });
   expect(started).toEqual({ ok: true });
 
@@ -65,6 +68,11 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
 
   const recording = await send(popup, { target: 'sw', type: 'GET_STATE' });
   expect(recording.status).toBe('recording');
+  // Le micro réellement ouvert est connu, et affiché à côté des meters.
+  expect(recording.mic).toMatchObject({ fallback: false, lost: false });
+  expect(recording.mic.name).not.toBe('');
+  await popup.reload();
+  await expect(popup.locator('#mic-name')).toHaveText(`Mic: ${recording.mic.name}`);
   // Les chunks sont écrits pendant l'enregistrement, pas à la fin (F-AUD-03).
   // Borne à 2 et non 3 : le troisième chunk se termine pile à t = 50 s, l'exiger
   // ici rendrait le test dépendant de quelques millisecondes.
@@ -156,8 +164,14 @@ test('reprend la transcription après un échec API, sans perdre les chunks (ret
     tabId,
     url: `${api.url}/meeting`,
     micEnabled: true,
+    // Micro mémorisé puis débranché : l'enregistrement doit démarrer quand même,
+    // sur le défaut système, et le dire.
+    micDeviceId: 'micro-debranche',
   });
   expect(started).toEqual({ ok: true });
+  const fallback = await send(popup, { target: 'sw', type: 'GET_STATE' });
+  expect(fallback.mic).toMatchObject({ fallback: true, lost: false });
+  expect(fallback.mic.name).not.toBe('');
 
   await popup.waitForTimeout(RECORDING_MS);
   await send(popup, { target: 'sw', type: 'STOP_RECORDING' });
@@ -237,6 +251,7 @@ test('transcrit en une seule requête quand les limites du provider le permetten
     tabId,
     url: `${api.url}/meeting`,
     micEnabled: true,
+    micDeviceId: null,
   });
   expect(started).toEqual({ ok: true });
 

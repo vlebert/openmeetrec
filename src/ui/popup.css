@@ -1,4 +1,6 @@
 :root { color-scheme: light dark; }
+/* Sans ça, un `display: flex` de classe l'emporte sur l'attribut `hidden`. */
+[hidden] { display: none !important; }
 body { width: 260px; margin: 0; font: 13px/1.4 system-ui, sans-serif; }
 main { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -10,6 +12,11 @@ h1 { font-size: 14px; margin: 0; }
 .meters label { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(127,127,127,0.25); overflow: hidden; }
 .bar > span { display: block; height: 100%; width: 0; background: currentColor; transition: width 80ms linear; }
+.mic-option { display: flex; flex-direction: column; gap: 4px; }
+.mic-option select { font: inherit; font-size: 12px; max-width: 100%; }
+.mic-name { margin: 0; font-size: 11px; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hint { margin: 0; font-size: 11px; opacity: 0.6; }
+.warning { margin: 0; font-size: 12px; color: #b26a00; }
 .option { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 button { padding: 8px; font: inherit; cursor: pointer; }
 button[disabled] { cursor: default; opacity: 0.5; }

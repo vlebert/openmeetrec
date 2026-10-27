@@ -26,3 +26,21 @@ export async function loadConfig(): Promise<Config> {
 export async function saveConfig(config: Config): Promise<void> {
   await chrome.storage.local.set({ [CONFIG_KEY]: config });
 }
+
+const MIC_DEVICE_KEY = 'micDeviceId';
+
+/**
+ * Micro choisi dans le popup, `null` = défaut système. Hors de `Config` : c'est
+ * un réglage du poste, pas de la transcription, et un `deviceId` n'a de sens
+ * que pour cette installation de l'extension.
+ */
+export async function loadMicDevice(): Promise<string | null> {
+  const stored = await chrome.storage.local.get(MIC_DEVICE_KEY);
+  const value: unknown = stored[MIC_DEVICE_KEY];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+export async function saveMicDevice(deviceId: string | null): Promise<void> {
+  if (deviceId === null) await chrome.storage.local.remove(MIC_DEVICE_KEY);
+  else await chrome.storage.local.set({ [MIC_DEVICE_KEY]: deviceId });
+}

@@ -37,6 +37,8 @@ export interface SessionState {
   duration: number;
   chunkCount: number;
   micEnabled: boolean;
+  /** Micro réellement ouvert, `null` hors enregistrement ou sans micro. */
+  mic: MicStatus | null;
   /** Avancement de la transcription pendant `processing`. */
   progress: { done: number; total: number } | null;
   /** Chemins des fichiers téléchargés en fin de session. */
@@ -53,10 +55,20 @@ export const IDLE_STATE: SessionState = {
   duration: 0,
   chunkCount: 0,
   micEnabled: true,
+  mic: null,
   progress: null,
   downloads: [],
   error: null,
 };
+
+export interface MicStatus {
+  /** Nom du périphérique, tel que l'affiche le système. */
+  name: string;
+  /** Le micro choisi n'était plus branché : on a ouvert le défaut système. */
+  fallback: boolean;
+  /** La piste micro s'est arrêtée en cours d'enregistrement (micro débranché). */
+  lost: boolean;
+}
 
 export interface AudioLevels {
   /** RMS normalisé 0..1. */
@@ -66,7 +78,7 @@ export interface AudioLevels {
 
 /** Messages traités par le service worker. */
 export type ToWorkerMessage =
-  | { target: 'sw'; type: 'START_RECORDING'; tabId: number; url: string; micEnabled: boolean }
+  | { target: 'sw'; type: 'START_RECORDING'; tabId: number; url: string; micEnabled: boolean; micDeviceId: string | null }
   | { target: 'sw'; type: 'STOP_RECORDING' }
   | { target: 'sw'; type: 'RETRY_PIPELINE' }
   | { target: 'sw'; type: 'GET_STATE' }
@@ -74,7 +86,8 @@ export type ToWorkerMessage =
   | { target: 'sw'; type: 'CHUNK_READY'; index: number; start: number; end: number }
   | { target: 'sw'; type: 'RECORDING_STOPPED'; duration: number; chunkCount: number }
   | { target: 'sw'; type: 'PIPELINE_PROGRESS'; done: number; total: number }
-  | { target: 'sw'; type: 'CAPTURE_ERROR'; error: SessionError };
+  | { target: 'sw'; type: 'CAPTURE_ERROR'; error: SessionError }
+  | { target: 'sw'; type: 'MIC_LOST' };
 
 /** Messages traités par l'offscreen document. */
 export type ToOffscreenMessage =
@@ -84,6 +97,8 @@ export type ToOffscreenMessage =
       sessionId: string;
       grant: CaptureGrant;
       micEnabled: boolean;
+      /** `null` = micro par défaut du système. */
+      micDeviceId: string | null;
       keepFullTrack: boolean;
     }
   | { target: 'offscreen'; type: 'STOP_CAPTURE' }
@@ -102,6 +117,11 @@ export type ExtensionMessage = ToWorkerMessage | ToOffscreenMessage;
 export interface Ack {
   ok: boolean;
   error?: SessionError;
+}
+
+/** Réponse à `START_CAPTURE` : le micro ouvert, pour l'afficher. */
+export interface CaptureAck extends Ack {
+  mic?: Omit<MicStatus, 'lost'>;
 }
 
 /**

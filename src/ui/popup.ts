@@ -6,6 +6,8 @@
  * `activeTab` nécessaire à `tabCapture`.
  */
 
+import { micOptions, resolveMicChoice } from '@/audio/micDevices';
+import { loadMicDevice, saveMicDevice } from '@/config/storage';
 import { formatTimestamp } from '@/shared/format';
 import type { Ack, AudioLevels, SessionState, ToOffscreenMessage, ToWorkerMessage } from '@/shared/messages';
 
@@ -17,8 +19,12 @@ const el = {
   meters: byId<HTMLElement>('meters'),
   micLevel: byId<HTMLSpanElement>('mic-level'),
   tabLevel: byId<HTMLSpanElement>('tab-level'),
-  micOption: byId<HTMLLabelElement>('mic-option'),
+  micName: byId<HTMLParagraphElement>('mic-name'),
+  micWarning: byId<HTMLParagraphElement>('mic-warning'),
+  micOption: byId<HTMLElement>('mic-option'),
   micEnabled: byId<HTMLInputElement>('mic-enabled'),
+  micDevice: byId<HTMLSelectElement>('mic-device'),
+  micMissing: byId<HTMLParagraphElement>('mic-missing'),
   toggle: byId<HTMLButtonElement>('toggle'),
   error: byId<HTMLParagraphElement>('error'),
   history: byId<HTMLParagraphElement>('history'),
@@ -31,12 +37,24 @@ const el = {
 let tabId: number | null = null;
 let tabUrl = '';
 let state: SessionState | null = null;
+/** Micro mémorisé, `null` = défaut système. */
+let preferredMic: string | null = null;
 
 el.toggle.addEventListener('click', () => void onToggle());
 el.grantMic.addEventListener('click', () => {
   void chrome.tabs.create({ url: chrome.runtime.getURL('ui/mic-permission.html') });
 });
 el.retry.addEventListener('click', () => void onRetry());
+el.micEnabled.addEventListener('change', () => {
+  el.micDevice.disabled = !el.micEnabled.checked;
+});
+el.micDevice.addEventListener('change', () => {
+  preferredMic = el.micDevice.value === '' ? null : el.micDevice.value;
+  el.micMissing.hidden = true;
+  void saveMicDevice(preferredMic);
+});
+// Casque branché ou débranché pendant que le popup est ouvert.
+navigator.mediaDevices.addEventListener('devicechange', () => void loadMics());
 el.options.addEventListener('click', (event) => {
   event.preventDefault();
   chrome.runtime.openOptionsPage();
@@ -49,6 +67,8 @@ async function init(): Promise<void> {
   tabId = tab?.id ?? null;
   tabUrl = tab?.url ?? '';
   el.platform.textContent = hostOf(tabUrl);
+  preferredMic = await loadMicDevice();
+  await loadMics();
   await refresh();
   setInterval(() => void refresh(), LEVELS_INTERVAL_MS * 4);
   setInterval(() => void refreshLevels(), LEVELS_INTERVAL_MS);
@@ -59,10 +79,38 @@ async function onToggle(): Promise<void> {
   const recording = state?.status === 'recording';
   const message: ToWorkerMessage = recording
     ? { target: 'sw', type: 'STOP_RECORDING' }
-    : { target: 'sw', type: 'START_RECORDING', tabId: tabId ?? -1, url: tabUrl, micEnabled: el.micEnabled.checked };
+    : {
+        target: 'sw',
+        type: 'START_RECORDING',
+        tabId: tabId ?? -1,
+        url: tabUrl,
+        micEnabled: el.micEnabled.checked,
+        // Le micro mémorisé, même s'il semble absent : l'offscreen se replie
+        // sur le défaut système et le signale.
+        micDeviceId: preferredMic,
+      };
   const ack = (await chrome.runtime.sendMessage(message)) as Ack;
   if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission');
   await refresh();
+}
+
+/**
+ * Remplit le sélecteur. Les noms des micros ne sont visibles qu'une fois
+ * l'autorisation micro accordée à l'extension (`ui/mic-permission.html`).
+ */
+async function loadMics(): Promise<void> {
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  const { choice, missing } = resolveMicChoice(preferredMic, devices);
+  el.micDevice.replaceChildren(
+    ...micOptions(devices).map(({ value, label }) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }),
+  );
+  el.micDevice.value = choice ?? '';
+  el.micMissing.hidden = !missing;
 }
 
 async function onRetry(): Promise<void> {
@@ -105,6 +153,8 @@ function render(): void {
   el.meters.hidden = !recording;
   el.micOption.hidden = recording || busy;
   el.micEnabled.disabled = recording || busy;
+  el.micDevice.disabled = recording || busy || !el.micEnabled.checked;
+  renderMic(recording ? current : null);
 
   if (current.error) {
     showError(current.error.message, current.error.code === 'mic-permission');
@@ -122,6 +172,25 @@ function render(): void {
     el.timer.textContent = formatTimestamp((Date.now() - current.startedAt) / 1000);
     if (current.platform) el.platform.textContent = current.platform;
   }
+}
+
+/** Micro réellement enregistré, à côté des meters. */
+function renderMic(current: SessionState | null): void {
+  const mic = current?.mic ?? null;
+  el.micName.hidden = mic === null;
+  el.micName.textContent = mic ? `Mic: ${mic.name}` : '';
+  el.micName.title = el.micName.textContent;
+  const warning = !current
+    ? ''
+    : !current.micEnabled
+      ? 'Microphone not recorded.'
+      : mic?.lost
+        ? 'Microphone disconnected — only the meeting audio is being recorded.'
+        : mic?.fallback
+          ? 'Saved microphone not found — recording the system default.'
+          : '';
+  el.micWarning.hidden = warning === '';
+  el.micWarning.textContent = warning;
 }
 
 function statusLabel(current: SessionState): string {
