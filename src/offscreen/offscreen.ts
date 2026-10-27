@@ -229,16 +229,54 @@ async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_
   const [track] = tabStream.getAudioTracks();
   if (track) track.addEventListener('ended', () => void finish());
 
-  // Micro débranché en cours de route : l'enregistrement continue avec le son
-  // de l'onglet, le popup affiche un avertissement.
-  const [micTrack] = micStream?.getAudioTracks() ?? [];
-  micTrack?.addEventListener('ended', () => {
-    if (!current.finishing) notify({ target: 'sw', type: 'MIC_LOST' });
-  });
+  if (micStream) watchMic(current, micStream);
 
   session = current;
   current.scheduler.start();
   return { ok: true, ...(mic ? { mic } : {}) };
+}
+
+/**
+ * Micro débranché en cours de route : on rouvre le micro par défaut du système
+ * et on le branche à chaud dans le mixer. Si rien ne peut être rouvert,
+ * l'enregistrement continue avec le son de l'onglet seul et le popup prévient
+ * — on n'interrompt pas une réunion en cours.
+ */
+function watchMic(current: Session, stream: MediaStream): void {
+  const [track] = stream.getAudioTracks();
+  track?.addEventListener('ended', () => {
+    if (current.finishing) return;
+    void switchToDefaultMic(current).then((name) => {
+      notify(name === null ? { target: 'sw', type: 'MIC_LOST' } : { target: 'sw', type: 'MIC_SWITCHED', name });
+    });
+  });
+}
+
+const MIC_REOPEN_ATTEMPTS = 3;
+const MIC_REOPEN_DELAY_MS = 500;
+
+async function switchToDefaultMic(current: Session): Promise<string | null> {
+  // Juste après un débranchement, le système n'a pas toujours fini de désigner
+  // un nouveau micro par défaut : on laisse quelques essais.
+  for (let attempt = 0; attempt < MIC_REOPEN_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, MIC_REOPEN_DELAY_MS));
+    if (current.finishing) return null;
+    try {
+      const { stream } = await openMic(null);
+      if (current.finishing) {
+        stopStream(stream);
+        return null;
+      }
+      if (current.micStream) stopStream(current.micStream);
+      current.micStream = stream;
+      current.mixer.replaceMic(stream);
+      watchMic(current, stream);
+      return await describeMic(stream);
+    } catch {
+      // Nouvel essai.
+    }
+  }
+  return null;
 }
 
 const MIC_PROCESSING = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };

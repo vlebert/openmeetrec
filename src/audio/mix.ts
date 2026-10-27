@@ -24,10 +24,17 @@ export interface Mixer {
   readonly stream: MediaStream;
   /** Niveaux RMS normalisés 0..1, pour les meters du popup. */
   levels(): AudioLevelsSnapshot;
+  /**
+   * Remplace le micro à chaud (micro débranché en cours d'enregistrement). Le
+   * flux de sortie ne change pas : les MediaRecorder qui le lisent continuent
+   * sans rien voir.
+   */
+  replaceMic(mic: MediaStream): void;
   close(): Promise<void>;
 }
 
 interface Meter {
+  source: MediaStreamAudioSourceNode;
   analyser: AnalyserNode;
   buffer: Uint8Array<ArrayBuffer>;
 }
@@ -44,11 +51,15 @@ export function createMixer(sources: MixerSources): Mixer {
   // Ré-injection : sans ça, la visio devient muette pour l'utilisateur.
   tabSource.connect(ctx.destination);
 
-  const micMeter = sources.mic ? attach(ctx, ctx.createMediaStreamSource(sources.mic), destination) : null;
+  let micMeter = sources.mic ? attach(ctx, ctx.createMediaStreamSource(sources.mic), destination) : null;
 
   return {
     stream: destination.stream,
     levels: () => ({ tab: rms(tabMeter), mic: micMeter ? rms(micMeter) : 0 }),
+    replaceMic: (mic) => {
+      micMeter?.source.disconnect();
+      micMeter = attach(ctx, ctx.createMediaStreamSource(mic), destination);
+    },
     close: async () => {
       await ctx.close();
     },
@@ -60,7 +71,7 @@ function attach(ctx: AudioContext, source: MediaStreamAudioSourceNode, destinati
   analyser.fftSize = 512;
   source.connect(analyser);
   source.connect(destination);
-  return { analyser, buffer: new Uint8Array(new ArrayBuffer(analyser.fftSize)) };
+  return { source, analyser, buffer: new Uint8Array(new ArrayBuffer(analyser.fftSize)) };
 }
 
 function rms(meter: Meter): number {

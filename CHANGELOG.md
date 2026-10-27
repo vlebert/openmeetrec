@@ -15,8 +15,9 @@ version.
   level meters.
 - If the saved microphone is no longer connected, recording starts on the system default and the
   popup says so instead of failing.
-- If the microphone is disconnected while recording, the popup warns that only the meeting audio is
-  still being recorded.
+- If the microphone is disconnected while recording, recording switches to the system default
+  microphone without stopping, and the popup says so. If no microphone can be reopened, the popup
+  warns that only the meeting audio is still being recorded.
 
 ### Fixed
 

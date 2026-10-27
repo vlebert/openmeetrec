@@ -119,6 +119,13 @@ async function handle(message: ToWorkerMessage): Promise<Ack | SessionState> {
     case 'CAPTURE_ERROR':
       await fail(message.error);
       return { ok: true };
+    case 'MIC_SWITCHED': {
+      const state = await readState();
+      if (state.status === 'recording' && state.mic) {
+        await writeState({ ...state, mic: { ...state.mic, name: message.name, switched: true, lost: false } });
+      }
+      return { ok: true };
+    }
     case 'MIC_LOST': {
       // L'enregistrement continue avec le son de l'onglet seul : on prévient
       // plutôt que d'interrompre une réunion en cours.
@@ -183,7 +190,7 @@ async function startRecording(
     platform: platformFromUrl(message.url),
     startedAt: Date.now(),
     micEnabled: message.micEnabled,
-    mic: ack.mic ? { ...ack.mic, lost: false } : null,
+    mic: ack.mic ? { ...ack.mic, switched: false, lost: false } : null,
   });
   return { ok: true };
 }

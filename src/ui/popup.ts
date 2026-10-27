@@ -186,9 +186,11 @@ function renderMic(current: SessionState | null): void {
       ? 'Microphone not recorded.'
       : mic?.lost
         ? 'Microphone disconnected — only the meeting audio is being recorded.'
-        : mic?.fallback
-          ? 'Saved microphone not found — recording the system default.'
-          : '';
+        : mic?.switched
+          ? 'Microphone disconnected — switched to the system default.'
+          : mic?.fallback
+            ? 'Saved microphone not found — recording the system default.'
+            : '';
   el.micWarning.hidden = warning === '';
   el.micWarning.textContent = warning;
 }

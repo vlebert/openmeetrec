@@ -66,7 +66,9 @@ export interface MicStatus {
   name: string;
   /** Le micro choisi n'était plus branché : on a ouvert le défaut système. */
   fallback: boolean;
-  /** La piste micro s'est arrêtée en cours d'enregistrement (micro débranché). */
+  /** Micro débranché en cours d'enregistrement, remplacé par le défaut système. */
+  switched: boolean;
+  /** Micro débranché en cours d'enregistrement, et aucun micro n'a pu être rouvert. */
   lost: boolean;
 }
 
@@ -87,6 +89,7 @@ export type ToWorkerMessage =
   | { target: 'sw'; type: 'RECORDING_STOPPED'; duration: number; chunkCount: number }
   | { target: 'sw'; type: 'PIPELINE_PROGRESS'; done: number; total: number }
   | { target: 'sw'; type: 'CAPTURE_ERROR'; error: SessionError }
+  | { target: 'sw'; type: 'MIC_SWITCHED'; name: string }
   | { target: 'sw'; type: 'MIC_LOST' };
 
 /** Messages traités par l'offscreen document. */
@@ -121,7 +124,7 @@ export interface Ack {
 
 /** Réponse à `START_CAPTURE` : le micro ouvert, pour l'afficher. */
 export interface CaptureAck extends Ack {
-  mic?: Omit<MicStatus, 'lost'>;
+  mic?: Omit<MicStatus, 'switched' | 'lost'>;
 }
 
 /**
