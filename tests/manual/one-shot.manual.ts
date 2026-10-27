@@ -79,7 +79,7 @@ describe.skipIf(!canRun)('transcription en une seule requête', () => {
       const config: Config = {
         ...DEFAULT_CONFIG,
         provider: provider === 'custom' ? 'custom' : provider,
-        model: model ?? (provider === 'openai' ? 'whisper-1' : 'voxtral-mini-latest'),
+        model: model ?? (provider === 'openai' ? 'whisper-1' : 'voxtral-mini-transcribe-3'),
         apiKeys: { [provider]: apiKey! },
         diarize,
         downloadAudio: false,

@@ -82,7 +82,7 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 
 | ID | Exigence |
 |---|---|
-| F-TR-01 | Provider Mistral : endpoint Voxtral (`voxtral-mini-latest`) |
+| F-TR-01 | Provider Mistral : endpoint Voxtral (`voxtral-mini-transcribe-3` par défaut) |
 | F-TR-02 | Provider OpenAI : endpoint Whisper (`whisper-1`, `verbose_json`) |
 | F-TR-03 | Provider Custom : endpoint + modèle libres |
 | F-TR-04 | **Segments horodatés demandés systématiquement**, indépendamment de la diarization — c'est ce qui permet le merge sans doublons |
@@ -118,7 +118,7 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 | F-OP-06 | Toggle diarization (visible/actif uniquement si Mistral sélectionné) |
 | F-OP-07 | Toggle « télécharger l'audio en plus du markdown » |
 
-**Presets de modèles.** Seuls les modèles renvoyant des segments horodatés sont proposés par défaut : `voxtral-mini-latest`, `voxtral-mini-transcribe-3`, `voxtral-small-transcribe-3` (Mistral), `whisper-1` (OpenAI). `gpt-4o-transcribe` n'expose pas de segments (`verbose_json` non supporté) : accessible uniquement via le champ custom, avec l'avertissement F-TR-07.
+**Presets de modèles.** Seuls les modèles renvoyant des segments horodatés sont proposés par défaut : `voxtral-mini-transcribe-3` (défaut), `voxtral-small-transcribe-3`, `voxtral-mini-latest` (Transcribe 2) (Mistral), `whisper-1` (OpenAI). `gpt-4o-transcribe` n'expose pas de segments (`verbose_json` non supporté) : accessible uniquement via le champ custom, avec l'avertissement F-TR-07.
 
 ## 9. Non-fonctionnel
 

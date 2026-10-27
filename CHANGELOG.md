@@ -6,17 +6,19 @@ version.
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-10-22
+## [0.9.0] - 2026-10-27
 
 ### Added
 
 - Mistral **Voxtral 3** model presets: `voxtral-mini-transcribe-3` (Voxtral Mini Transcribe 3) and
-  `voxtral-small-transcribe-3` (Voxtral Small Transcribe 3, higher accuracy). The default model is
-  unchanged: `voxtral-mini-latest` still points to Transcribe 2 (`voxtral-mini-2602`) on Mistral's
-  side, and is now labelled "Voxtral Mini Transcribe 2".
+  `voxtral-small-transcribe-3` (Voxtral Small Transcribe 3, higher accuracy).
 
 ### Changed
 
+- **Voxtral Mini Transcribe 3 is the new default model.** A model already chosen in the settings is
+  kept. Transcribe 2 stays available as "Voxtral Mini Transcribe 2" (`voxtral-mini-latest`, which
+  still points to `voxtral-mini-2602` on Mistral's side): it handles up to 1 h 30 in a single
+  request, versus 45 minutes for Voxtral 3.
 - Single-request transcription is capped at **45 minutes** with Voxtral 3 models, versus 1 h 30
   with Transcribe 2. Voxtral 3 counts the transcript in its 65,536-token context window along with
   the audio, so a long recording is either refused (1 h 29) or, worse, accepted and cut off without

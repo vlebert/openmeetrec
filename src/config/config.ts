@@ -9,7 +9,7 @@ import { getProviderPreset, PROVIDER_PRESETS } from '@/providers/registry';
 
 export const DEFAULT_CONFIG: Config = {
   provider: 'mistral',
-  model: 'voxtral-mini-latest',
+  model: 'voxtral-mini-transcribe-3',
   apiKeys: {},
   diarize: true,
   downloadAudio: false,

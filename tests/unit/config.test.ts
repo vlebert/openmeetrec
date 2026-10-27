@@ -91,7 +91,7 @@ describe('normalizeConfig', () => {
 
 describe('defaultModelFor', () => {
   it('donne le premier preset du provider', () => {
-    expect(defaultModelFor('mistral')).toBe('voxtral-mini-latest');
+    expect(defaultModelFor('mistral')).toBe('voxtral-mini-transcribe-3');
     expect(defaultModelFor('openai')).toBe('whisper-1');
   });
 

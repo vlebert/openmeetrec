@@ -401,8 +401,8 @@ avertissement sur les doublons possibles aux frontières de chunks (F-TR-07).
 
 ### 5.3 Modèles & endpoint
 
-- Presets (renvoient des segments) : `voxtral-mini-latest` (Transcribe 2), `voxtral-mini-transcribe-3`,
-  `voxtral-small-transcribe-3` (Mistral), `whisper-1` (OpenAI). Voxtral 3 compte la sortie dans sa
+- Presets (renvoient des segments) : `voxtral-mini-transcribe-3` (défaut), `voxtral-small-transcribe-3`,
+  `voxtral-mini-latest` (Transcribe 2) (Mistral), `whisper-1` (OpenAI). Voxtral 3 compte la sortie dans sa
   fenêtre de 65 536 tokens : requête unique plafonnée à 45 min, et une réponse qui remplit la fenêtre
   (tronquée sans erreur) est rejetée par `MistralProvider` pour repasser en chunks.
 - `gpt-4o-transcribe` ne supporte pas `verbose_json` : non proposé en preset, accessible via le champ
@@ -420,7 +420,7 @@ les autres : il est marqué dans le résultat et signalé dans le markdown.
 
 ```markdown
 ---
-model: voxtral-mini-latest
+model: voxtral-mini-transcribe-3
 provider: mistral
 date: 2026-04-13T12:34:56Z
 duration: 1842

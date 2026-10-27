@@ -28,12 +28,14 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
     id: 'mistral',
     label: 'Mistral (Voxtral)',
     endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+    // Le premier preset est le défaut du provider (`defaultModelFor`).
     // `voxtral-mini-latest` reste sur Transcribe 2 (`voxtral-mini-2602`) : Mistral
     // n'a pas déplacé l'alias à la sortie de Voxtral 3, d'où des presets v3 explicites.
+    // Transcribe 2 reste proposé : il tient 1 h 30 en une requête, contre 45 min en v3.
     models: [
-      { id: 'voxtral-mini-latest', label: 'Voxtral Mini Transcribe 2', supportsSegments: true },
       { id: 'voxtral-mini-transcribe-3', label: 'Voxtral Mini Transcribe 3', supportsSegments: true },
       { id: 'voxtral-small-transcribe-3', label: 'Voxtral Small Transcribe 3', supportsSegments: true },
+      { id: 'voxtral-mini-latest', label: 'Voxtral Mini Transcribe 2', supportsSegments: true },
     ],
     supportsDiarization: true,
   },
