@@ -15,6 +15,8 @@ export type SessionStatus = 'idle' | 'recording' | 'processing' | 'done' | 'erro
 
 export type SessionErrorCode =
   | 'mic-permission'
+  /** Micro absent, occupé, ou bloqué par le système : l'autorisation n'y change rien. */
+  | 'mic-unavailable'
   | 'capture-failed'
   | 'unsupported'
   | 'already-recording'

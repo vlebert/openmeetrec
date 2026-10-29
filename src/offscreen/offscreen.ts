@@ -11,6 +11,7 @@ import { planChunks } from '@/audio/chunking';
 import { RUNTIME_CHUNK_OPTIONS } from '@/audio/chunkOptions';
 import { ChunkScheduler, type RecorderLike } from '@/audio/chunkScheduler';
 import { micConstraints, micDisplayName } from '@/audio/micDevices';
+import { classifyMicError } from '@/audio/micErrors';
 import { createMixer, type Mixer } from '@/audio/mix';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { runSingleRequest, runTranscription } from '@/pipeline/pipeline';
@@ -174,8 +175,10 @@ async function startCapture(message: Extract<ToOffscreenMessage, { type: 'START_
       stopStream(tabStream);
       // L'offscreen document ne peut pas afficher de prompt : si l'autorisation
       // micro n'a jamais été accordée à l'extension, elle doit l'être depuis une
-      // page d'extension (ui/mic-permission.html).
-      throw new CaptureError('mic-permission', describe(error));
+      // page d'extension (ui/mic-permission.html). Les autres causes (micro
+      // absent, occupé, bloqué par l'OS) ont leur propre message.
+      const failure = classifyMicError(error);
+      throw new CaptureError(failure.kind === 'permission' ? 'mic-permission' : 'mic-unavailable', failure.message);
     }
   }
 

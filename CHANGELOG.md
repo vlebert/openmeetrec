@@ -20,8 +20,23 @@ version.
   microphone without stopping, and the popup says so. If no microphone can be reopened, the popup
   warns that only the meeting audio is still being recorded.
 
+- The popup warns that the extension doesn't have microphone access **before** you click Start,
+  with a button to allow it. If access was blocked in Chrome, it links to the extension's Chrome
+  settings instead, the only place where it can be unblocked.
+
+### Changed
+
+- Clearer microphone errors. The raw browser message ("Permission dismissed") is replaced with an
+  explanation and what to do. A missing microphone, a microphone used by another application, or
+  one blocked by the operating system (macOS privacy settings) is no longer reported as a
+  permission problem, and no longer offers a permission page that couldn't fix it.
+- The microphone permission page tells whether access is already allowed, and handles the case
+  where it was blocked.
+
 ### Fixed
 
+- After allowing the microphone, the popup no longer keeps showing the permission error until the
+  browser is restarted.
 - The level meters were shown in the popup even when not recording.
 
 ## [0.9.0] - 2026-10-27

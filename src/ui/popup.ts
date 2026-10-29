@@ -9,8 +9,9 @@
 import { micConstraints, micOptions, resolveMicChoice, type MicChoice } from '@/audio/micDevices';
 import { createLevelMeter, type LevelMeter } from '@/audio/mix';
 import { loadMicDevice, saveMicDevice } from '@/config/storage';
+import { openMicPermissionPage, openMicSettings, watchMicPermission, type MicPermission } from '@/ui/micAccess';
 import { formatTimestamp } from '@/shared/format';
-import type { Ack, AudioLevels, SessionState, ToOffscreenMessage, ToWorkerMessage } from '@/shared/messages';
+import type { AudioLevels, SessionState, ToOffscreenMessage, ToWorkerMessage } from '@/shared/messages';
 
 const LEVELS_INTERVAL_MS = 150;
 
@@ -28,11 +29,13 @@ const el = {
   micMissing: byId<HTMLParagraphElement>('mic-missing'),
   micPreview: byId<HTMLLabelElement>('mic-preview'),
   micPreviewLevel: byId<HTMLSpanElement>('mic-preview-level'),
+  micAccess: byId<HTMLElement>('mic-access'),
+  micAccessText: byId<HTMLParagraphElement>('mic-access-text'),
+  micAccessAction: byId<HTMLButtonElement>('mic-access-action'),
   toggle: byId<HTMLButtonElement>('toggle'),
   error: byId<HTMLParagraphElement>('error'),
   history: byId<HTMLParagraphElement>('history'),
   retry: byId<HTMLButtonElement>('retry'),
-  grantMic: byId<HTMLButtonElement>('grant-mic'),
   platform: byId<HTMLElement>('platform'),
   options: byId<HTMLAnchorElement>('options'),
 };
@@ -44,6 +47,8 @@ let state: SessionState | null = null;
 let preferredMic: string | null = null;
 /** Micro qui sera réellement ouvert : le mémorisé s'il est branché, sinon le défaut. */
 let resolvedMic: MicChoice = null;
+/** Autorisation micro de l'extension, suivie en direct. */
+let micPermission: MicPermission = 'unknown';
 
 /**
  * Aperçu du niveau du micro sélectionné, avant d'enregistrer : un nom de
@@ -60,13 +65,14 @@ let previewWanted: string | null = null;
 let starting = false;
 
 el.toggle.addEventListener('click', () => void onToggle());
-el.grantMic.addEventListener('click', () => {
-  void chrome.tabs.create({ url: chrome.runtime.getURL('ui/mic-permission.html') });
+el.micAccessAction.addEventListener('click', () => {
+  if (micPermission === 'denied') openMicSettings();
+  else openMicPermissionPage();
 });
 el.retry.addEventListener('click', () => void onRetry());
 el.micEnabled.addEventListener('change', () => {
   el.micDevice.disabled = !el.micEnabled.checked;
-  void syncPreview();
+  render();
 });
 el.micDevice.addEventListener('change', () => {
   preferredMic = el.micDevice.value === '' ? null : el.micDevice.value;
@@ -93,8 +99,9 @@ async function init(): Promise<void> {
   tabUrl = tab?.url ?? '';
   el.platform.textContent = hostOf(tabUrl);
   preferredMic = await loadMicDevice();
-  await loadMics();
+  micPermission = await watchMicPermission((next) => void onPermissionChange(next));
   await refresh();
+  await loadMics();
   setInterval(() => void refresh(), LEVELS_INTERVAL_MS * 4);
   setInterval(() => void refreshLevels(), LEVELS_INTERVAL_MS);
   setInterval(() => {
@@ -124,13 +131,23 @@ async function onToggle(): Promise<void> {
         micDeviceId: preferredMic,
       };
   try {
-    const ack = (await chrome.runtime.sendMessage(message)) as Ack;
-    if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission');
+    await chrome.runtime.sendMessage(message);
   } finally {
     starting = false;
   }
   // Rouvre l'aperçu si le démarrage a échoué.
   await refresh();
+}
+
+/**
+ * Autorisation accordée (page dédiée, réglages de Chrome) pendant que le popup
+ * est ouvert : noms des micros, aperçu et erreur se mettent à jour sans
+ * avoir à le rouvrir.
+ */
+async function onPermissionChange(next: MicPermission): Promise<void> {
+  micPermission = next;
+  await refresh();
+  await loadMics();
 }
 
 /**
@@ -160,13 +177,14 @@ async function loadMics(): Promise<void> {
  */
 async function syncPreview(): Promise<void> {
   const idle = state !== null && state.status !== 'recording' && state.status !== 'processing';
-  const wanted = idle && !starting && el.micEnabled.checked ? (resolvedMic ?? '') : null;
+  // Le popup ne peut pas afficher de demande d'autorisation : sans autorisation
+  // déjà accordée, pas d'aperçu (l'encart « micro non autorisé » s'en charge).
+  const wanted =
+    idle && !starting && el.micEnabled.checked && micPermission === 'granted' ? (resolvedMic ?? '') : null;
   if (wanted === previewWanted) return;
   previewWanted = wanted;
   await stopPreview();
-  // Le popup ne peut pas afficher de demande d'autorisation : sans autorisation
-  // déjà accordée, pas d'aperçu (le bouton « Allow microphone… » s'en charge).
-  if (wanted === null || !(await micGranted())) return;
+  if (wanted === null) return;
 
   let stream: MediaStream;
   try {
@@ -193,14 +211,7 @@ async function stopPreview(): Promise<void> {
   await current.meter.close();
 }
 
-async function micGranted(): Promise<boolean> {
-  try {
-    const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-    return status.state === 'granted';
-  } catch {
-    return false;
-  }
-}
+
 
 async function onRetry(): Promise<void> {
   el.retry.disabled = true;
@@ -211,7 +222,27 @@ async function onRetry(): Promise<void> {
 
 async function refresh(): Promise<void> {
   state = (await chrome.runtime.sendMessage({ target: 'sw', type: 'GET_STATE' } satisfies ToWorkerMessage)) as SessionState;
+  if (isStalePermissionError(state)) {
+    // Échec faute d'autorisation, autorisation accordée depuis : l'erreur ne
+    // dit plus rien de vrai. Sans ça, elle restait affichée jusqu'au
+    // redémarrage du navigateur (l'état vit dans `chrome.storage.session`).
+    await chrome.runtime.sendMessage({ target: 'sw', type: 'RESET' } satisfies ToWorkerMessage);
+    state = (await chrome.runtime.sendMessage({ target: 'sw', type: 'GET_STATE' } satisfies ToWorkerMessage)) as SessionState;
+  }
   render();
+}
+
+/**
+ * Un échec au démarrage n'a pas de session à reprendre (`sessionId` nul) :
+ * l'effacer ne perd rien.
+ */
+function isStalePermissionError(current: SessionState): boolean {
+  return (
+    current.status === 'error' &&
+    current.error?.code === 'mic-permission' &&
+    current.sessionId === null &&
+    micPermission === 'granted'
+  );
 }
 
 async function refreshLevels(): Promise<void> {
@@ -246,8 +277,16 @@ function render(): void {
   renderMic(recording ? current : null);
   void syncPreview();
 
-  if (current.error) {
-    showError(current.error.message, current.error.code === 'mic-permission');
+  const access = micAccessNotice(current);
+  el.micAccess.hidden = access === null;
+  if (access) {
+    el.micAccessText.textContent = access.text;
+    el.micAccessAction.textContent = access.action;
+  }
+
+  // L'encart d'autorisation dit déjà tout d'un échec faute d'autorisation.
+  if (current.error && !(current.error.code === 'mic-permission' && access)) {
+    showError(current.error.message);
   } else {
     hideError();
   }
@@ -300,19 +339,37 @@ function statusLabel(current: SessionState): string {
         ? `Done — ${current.downloads.join(', ')}`
         : `Done — ${current.chunkCount} chunk(s), ${formatTimestamp(current.duration)}`;
     case 'error':
-      return 'Error';
+      return current.error?.code === 'mic-permission' ? 'Microphone access needed' : 'Error';
   }
 }
 
-function showError(message: string, micPermission: boolean): void {
+/**
+ * Encart « micro non autorisé », affiché *avant* de cliquer sur Start : sans
+ * lui, on ne découvrait le problème qu'à l'échec du démarrage.
+ */
+function micAccessNotice(current: SessionState): { text: string; action: string } | null {
+  const idle = current.status !== 'recording' && current.status !== 'processing';
+  if (!idle || !el.micEnabled.checked) return null;
+  if (micPermission === 'denied') {
+    return {
+      text: 'Microphone access is blocked for OpenMeetRec. Allow it in Chrome’s settings, or uncheck the option above.',
+      action: 'Open Chrome settings',
+    };
+  }
+  // `unknown` : API Permissions muette, on ne prévient qu'après un échec.
+  if (micPermission === 'prompt' || (micPermission === 'unknown' && current.error?.code === 'mic-permission')) {
+    return { text: 'OpenMeetRec doesn’t have microphone access yet.', action: 'Allow microphone…' };
+  }
+  return null;
+}
+
+function showError(message: string): void {
   el.error.hidden = false;
   el.error.textContent = message;
-  el.grantMic.hidden = !micPermission;
 }
 
 function hideError(): void {
   el.error.hidden = true;
-  el.grantMic.hidden = true;
 }
 
 function hostOf(url: string): string {

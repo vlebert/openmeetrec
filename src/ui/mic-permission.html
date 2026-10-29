@@ -13,8 +13,9 @@
         show the permission prompt itself. Click below and accept the browser's
         request: the permission is then valid for all your sessions.
       </p>
-      <button id="grant" type="button">Request microphone access</button>
-      <p id="result" class="status"></p>
+      <p id="result" class="status">Checking…</p>
+      <button id="grant" type="button" hidden>Request microphone access</button>
+      <button id="settings" type="button" class="link" hidden>Open Chrome settings</button>
     </main>
     <script type="module" src="mic-permission.js"></script>
   </body>

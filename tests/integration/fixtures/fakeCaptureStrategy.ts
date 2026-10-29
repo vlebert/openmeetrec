@@ -11,8 +11,10 @@
  * Ce qui vient *après* le grant — mix, ré-injection, recorders décalés, OPFS,
  * transcription, merge, export — est identique et bien exercé par le test.
  *
- * Le flux vient du périphérique factice de Chromium
- * (`--use-fake-device-for-media-stream`).
+ * Le flux est un oscillateur Web Audio, pas un `getUserMedia` : comme le vrai
+ * `tabCapture`, il ne dépend pas de l'autorisation micro. Sans ça, les tests
+ * qui démarrent sans cette autorisation échoueraient sur l'onglet avant même
+ * d'atteindre le micro — ce qui n'arrive jamais en production.
  */
 
 import type { CaptureGrant, CaptureStrategy } from '@/capture/strategy';
@@ -25,6 +27,11 @@ export class TabCaptureStrategy implements CaptureStrategy {
   }
 
   async openStream(_grant: CaptureGrant): Promise<MediaStream> {
-    return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const destination = ctx.createMediaStreamDestination();
+    oscillator.connect(destination);
+    oscillator.start();
+    return destination.stream;
   }
 }

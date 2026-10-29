@@ -235,12 +235,22 @@ l'extension. Sinon l'appel échoue en `NotAllowedError` sans rien afficher.
 
 D'où le parcours :
 
-1. L'offscreen tente `getUserMedia({ audio: true })`.
-2. En cas d'échec, il remonte une `SessionError { code: 'mic-permission' }` au service worker.
-3. Le popup affiche « Autoriser le micro… », qui ouvre `ui/mic-permission.html` **dans un
-   onglet** — une page d'extension classique, elle, peut afficher le prompt.
-4. Une fois accordée, l'autorisation vaut pour l'origine de l'extension, donc pour toutes les
-   sessions suivantes : ce détour n'a lieu qu'une fois.
+1. À l'ouverture, le popup lit l'état de l'autorisation (`navigator.permissions.query`) et le
+   suit en direct (`ui/micAccess.ts`). S'il manque, un encart le dit **avant** tout clic sur
+   Start : « Allow microphone… » ouvre `ui/mic-permission.html` **dans un onglet** — une page
+   d'extension classique, elle, peut afficher le prompt.
+2. Si l'utilisateur lance quand même, l'offscreen tente `getUserMedia` et classe l'échec
+   (`audio/micErrors.ts`) : `mic-permission` seulement s'il s'agit bien de l'autorisation ;
+   micro absent, occupé ou bloqué par l'OS donnent `mic-unavailable`, avec leur propre message
+   — accorder l'autorisation n'y changerait rien.
+3. Une fois accordée, l'autorisation vaut pour l'origine de l'extension, donc pour toutes les
+   sessions suivantes : ce détour n'a lieu qu'une fois. Le popup efface alors l'erreur
+   `mic-permission` laissée par l'échec : l'état de session vit dans `chrome.storage.session`
+   (§3.5), elle serait sinon restée affichée jusqu'au redémarrage du navigateur.
+4. Micro **bloqué** (bouton « Bloquer », ou demande fermée trop de fois) : Chrome ne redemande
+   plus, `getUserMedia` échoue aussitôt. Popup et page d'autorisation renvoient alors vers les
+   réglages de Chrome pour l'extension (`chrome://settings/content/siteDetails?site=…`), seul
+   moyen de débloquer.
 
 L'alternative (demander le micro depuis le popup) est fragile : le popup se ferme dès que le
 prompt prend le focus, ce qui annule la demande.
