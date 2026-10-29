@@ -6,6 +6,8 @@ version.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-29
+
 ### Added
 
 - **Microphone selector** in the popup. It defaults to the system microphone (shown by name), and
