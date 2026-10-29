@@ -28,8 +28,9 @@
           Also record my microphone
         </label>
         <select id="mic-device" aria-label="Microphone"></select>
+        <label class="preview" id="mic-preview" hidden>Level <span class="bar"><span id="mic-preview-level"></span></span></label>
         <p id="mic-missing" class="warning" hidden>Saved microphone not found — the system default will be used.</p>
-        <p class="hint">Pick the same microphone as in your meeting.</p>
+        <p class="hint">Pick the same microphone as in your meeting — speak to check the level.</p>
       </section>
 
       <button id="toggle" type="button" disabled>Start</button>

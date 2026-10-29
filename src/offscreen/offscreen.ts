@@ -10,7 +10,7 @@
 import { planChunks } from '@/audio/chunking';
 import { RUNTIME_CHUNK_OPTIONS } from '@/audio/chunkOptions';
 import { ChunkScheduler, type RecorderLike } from '@/audio/chunkScheduler';
-import { micDisplayName } from '@/audio/micDevices';
+import { micConstraints, micDisplayName } from '@/audio/micDevices';
 import { createMixer, type Mixer } from '@/audio/mix';
 import { TabCaptureStrategy } from '@/capture/tabCaptureStrategy';
 import { runSingleRequest, runTranscription } from '@/pipeline/pipeline';
@@ -279,8 +279,6 @@ async function switchToDefaultMic(current: Session): Promise<string | null> {
   return null;
 }
 
-const MIC_PROCESSING = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-
 /**
  * Ouvre le micro choisi, ou le défaut système. Un micro mémorisé mais débranché
  * depuis ne doit pas empêcher d'enregistrer : on se replie sur le défaut, et
@@ -289,15 +287,13 @@ const MIC_PROCESSING = { echoCancellation: true, noiseSuppression: true, autoGai
 async function openMic(deviceId: string | null): Promise<{ stream: MediaStream; fallback: boolean }> {
   if (deviceId !== null) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { ...MIC_PROCESSING, deviceId: { exact: deviceId } },
-      });
+      const stream = await navigator.mediaDevices.getUserMedia(micConstraints(deviceId));
       return { stream, fallback: false };
     } catch (error) {
       if (!isMissingDevice(error)) throw error;
     }
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_PROCESSING });
+  const stream = await navigator.mediaDevices.getUserMedia(micConstraints(null));
   return { stream, fallback: deviceId !== null };
 }
 

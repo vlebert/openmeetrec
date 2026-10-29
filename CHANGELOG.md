@@ -10,7 +10,8 @@ version.
 
 - **Microphone selector** in the popup. It defaults to the system microphone (shown by name), and
   the choice is remembered. Until now the extension always recorded Chrome's default microphone,
-  which may not be the one picked in the meeting app.
+  which may not be the one picked in the meeting app. A **level meter** under the selector shows the
+  selected microphone's input before recording, to find the right device when its name is unclear.
 - While recording, the popup shows **which microphone is actually being recorded**, next to the
   level meters.
 - If the saved microphone is no longer connected, recording starts on the system default and the

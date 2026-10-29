@@ -53,6 +53,16 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   await popup.goto(extensionUrl(ext.id, 'ui/popup.html'));
   // Sélecteur de micro : le défaut système en tête, toujours présent.
   await expect(popup.locator('#mic-device option').first()).toHaveText(/^System default/);
+  // Aperçu du niveau avant d'enregistrer : la barre bouge (le faux micro émet un bip)…
+  await expect(popup.locator('#mic-preview')).toBeVisible();
+  await expect
+    .poll(() => popup.locator('#mic-preview-level').evaluate((bar) => parseFloat((bar as HTMLElement).style.width) || 0))
+    .toBeGreaterThan(0);
+  // … et se ferme quand on n'enregistre pas le micro.
+  await popup.locator('#mic-enabled').uncheck();
+  await expect(popup.locator('#mic-preview')).toBeHidden();
+  await popup.locator('#mic-enabled').check();
+  await expect(popup.locator('#mic-preview')).toBeVisible();
 
   const started = await send(popup, {
     target: 'sw',
@@ -73,6 +83,8 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   expect(recording.mic.name).not.toBe('');
   await popup.reload();
   await expect(popup.locator('#mic-name')).toHaveText(`Mic: ${recording.mic.name}`);
+  // Pendant l'enregistrement, c'est l'offscreen qui tient le micro : pas d'aperçu.
+  await expect(popup.locator('#mic-preview')).toBeHidden();
   // Les chunks sont écrits pendant l'enregistrement, pas à la fin (F-AUD-03).
   // Borne à 2 et non 3 : le troisième chunk se termine pile à t = 50 s, l'exiger
   // ici rendrait le test dépendant de quelques millisecondes.

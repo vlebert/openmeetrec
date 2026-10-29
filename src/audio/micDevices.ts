@@ -26,6 +26,17 @@ export interface MicOption {
   label: string;
 }
 
+/**
+ * Traitements appliqués au micro, à l'enregistrement comme dans l'aperçu du
+ * popup : le niveau affiché avant de lancer doit être celui qui sera enregistré.
+ */
+export const MIC_PROCESSING = { echoCancellation: true, noiseSuppression: true, autoGainControl: true } as const;
+
+/** Contraintes `getUserMedia` : le micro choisi, ou le défaut système. */
+export function micConstraints(deviceId: MicChoice): { audio: { [key: string]: unknown } } {
+  return { audio: deviceId === null ? { ...MIC_PROCESSING } : { ...MIC_PROCESSING, deviceId: { exact: deviceId } } };
+}
+
 const DEFAULT_ID = 'default';
 const PSEUDO_IDS = new Set([DEFAULT_ID, 'communications']);
 

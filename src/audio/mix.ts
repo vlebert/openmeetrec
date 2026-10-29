@@ -66,6 +66,36 @@ export function createMixer(sources: MixerSources): Mixer {
   };
 }
 
+/**
+ * Niveau d'un flux seul, sans enregistrement : l'aperçu du micro dans le popup,
+ * pour choisir le bon périphérique avant de lancer. Même échelle que les meters
+ * d'enregistrement.
+ */
+export interface LevelMeter {
+  level(): number;
+  close(): Promise<void>;
+}
+
+export function createLevelMeter(stream: MediaStream): LevelMeter {
+  const ctx = new AudioContext();
+  const source = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  source.connect(analyser);
+  const meter: Meter = { source, analyser, buffer: new Uint8Array(new ArrayBuffer(analyser.fftSize)) };
+  return {
+    level: () => {
+      // Un AudioContext créé sans geste utilisateur peut démarrer suspendu, et
+      // un analyseur suspendu ne voit que du silence : on retente à chaque lecture.
+      if (ctx.state === 'suspended') void ctx.resume();
+      return rms(meter);
+    },
+    close: async () => {
+      await ctx.close();
+    },
+  };
+}
+
 function attach(ctx: AudioContext, source: MediaStreamAudioSourceNode, destination: AudioNode): Meter {
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 512;

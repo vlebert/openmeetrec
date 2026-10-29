@@ -6,7 +6,8 @@
  * `activeTab` nécessaire à `tabCapture`.
  */
 
-import { micOptions, resolveMicChoice } from '@/audio/micDevices';
+import { micConstraints, micOptions, resolveMicChoice, type MicChoice } from '@/audio/micDevices';
+import { createLevelMeter, type LevelMeter } from '@/audio/mix';
 import { loadMicDevice, saveMicDevice } from '@/config/storage';
 import { formatTimestamp } from '@/shared/format';
 import type { Ack, AudioLevels, SessionState, ToOffscreenMessage, ToWorkerMessage } from '@/shared/messages';
@@ -25,6 +26,8 @@ const el = {
   micEnabled: byId<HTMLInputElement>('mic-enabled'),
   micDevice: byId<HTMLSelectElement>('mic-device'),
   micMissing: byId<HTMLParagraphElement>('mic-missing'),
+  micPreview: byId<HTMLLabelElement>('mic-preview'),
+  micPreviewLevel: byId<HTMLSpanElement>('mic-preview-level'),
   toggle: byId<HTMLButtonElement>('toggle'),
   error: byId<HTMLParagraphElement>('error'),
   history: byId<HTMLParagraphElement>('history'),
@@ -39,6 +42,22 @@ let tabUrl = '';
 let state: SessionState | null = null;
 /** Micro mémorisé, `null` = défaut système. */
 let preferredMic: string | null = null;
+/** Micro qui sera réellement ouvert : le mémorisé s'il est branché, sinon le défaut. */
+let resolvedMic: MicChoice = null;
+
+/**
+ * Aperçu du niveau du micro sélectionné, avant d'enregistrer : un nom de
+ * périphérique ne dit pas toujours quel est le bon micro, une barre qui bouge
+ * quand on parle, si.
+ */
+let preview: { stream: MediaStream; meter: LevelMeter } | null = null;
+/**
+ * Micro dont l'aperçu est demandé (`''` = défaut système, `null` = aucun), pour
+ * ignorer une ouverture rendue obsolète entre-temps.
+ */
+let previewWanted: string | null = null;
+/** Démarrage en cours : l'aperçu doit rester fermé, l'offscreen ouvre le micro. */
+let starting = false;
 
 el.toggle.addEventListener('click', () => void onToggle());
 el.grantMic.addEventListener('click', () => {
@@ -47,12 +66,18 @@ el.grantMic.addEventListener('click', () => {
 el.retry.addEventListener('click', () => void onRetry());
 el.micEnabled.addEventListener('change', () => {
   el.micDevice.disabled = !el.micEnabled.checked;
+  void syncPreview();
 });
 el.micDevice.addEventListener('change', () => {
   preferredMic = el.micDevice.value === '' ? null : el.micDevice.value;
+  resolvedMic = preferredMic;
   el.micMissing.hidden = true;
   void saveMicDevice(preferredMic);
+  void syncPreview();
 });
+// Le navigateur libère le micro à la fermeture du popup ; on le fait quand même
+// explicitement, l'indicateur « micro utilisé » doit s'éteindre aussitôt.
+window.addEventListener('pagehide', () => void stopPreview());
 // Casque branché ou débranché pendant que le popup est ouvert.
 navigator.mediaDevices.addEventListener('devicechange', () => void loadMics());
 el.options.addEventListener('click', (event) => {
@@ -72,11 +97,20 @@ async function init(): Promise<void> {
   await refresh();
   setInterval(() => void refresh(), LEVELS_INTERVAL_MS * 4);
   setInterval(() => void refreshLevels(), LEVELS_INTERVAL_MS);
+  setInterval(() => {
+    if (preview) el.micPreviewLevel.style.width = `${Math.round(preview.meter.level() * 100)}%`;
+  }, LEVELS_INTERVAL_MS);
 }
 
 async function onToggle(): Promise<void> {
   el.toggle.disabled = true;
   const recording = state?.status === 'recording';
+  // Libère le micro avant que l'offscreen ne l'ouvre : certains périphériques
+  // (USB sous Windows notamment) n'acceptent qu'un client à la fois.
+  if (!recording) {
+    starting = true;
+    await syncPreview();
+  }
   const message: ToWorkerMessage = recording
     ? { target: 'sw', type: 'STOP_RECORDING' }
     : {
@@ -89,8 +123,13 @@ async function onToggle(): Promise<void> {
         // sur le défaut système et le signale.
         micDeviceId: preferredMic,
       };
-  const ack = (await chrome.runtime.sendMessage(message)) as Ack;
-  if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission');
+  try {
+    const ack = (await chrome.runtime.sendMessage(message)) as Ack;
+    if (!ack.ok && ack.error) showError(ack.error.message, ack.error.code === 'mic-permission');
+  } finally {
+    starting = false;
+  }
+  // Rouvre l'aperçu si le démarrage a échoué.
   await refresh();
 }
 
@@ -111,6 +150,56 @@ async function loadMics(): Promise<void> {
   );
   el.micDevice.value = choice ?? '';
   el.micMissing.hidden = !missing;
+  resolvedMic = choice;
+  await syncPreview();
+}
+
+/**
+ * Ouvre, change ou ferme l'aperçu selon l'état du popup. Appelée à chaque
+ * rendu : ne fait rien si le bon micro est déjà ouvert.
+ */
+async function syncPreview(): Promise<void> {
+  const idle = state !== null && state.status !== 'recording' && state.status !== 'processing';
+  const wanted = idle && !starting && el.micEnabled.checked ? (resolvedMic ?? '') : null;
+  if (wanted === previewWanted) return;
+  previewWanted = wanted;
+  await stopPreview();
+  // Le popup ne peut pas afficher de demande d'autorisation : sans autorisation
+  // déjà accordée, pas d'aperçu (le bouton « Allow microphone… » s'en charge).
+  if (wanted === null || !(await micGranted())) return;
+
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(micConstraints(wanted === '' ? null : wanted));
+  } catch {
+    return;
+  }
+  if (previewWanted !== wanted) {
+    // Autre micro choisi (ou enregistrement lancé) pendant l'ouverture.
+    stream.getTracks().forEach((track) => track.stop());
+    return;
+  }
+  preview = { stream, meter: createLevelMeter(stream) };
+  el.micPreview.hidden = false;
+}
+
+async function stopPreview(): Promise<void> {
+  const current = preview;
+  preview = null;
+  el.micPreview.hidden = true;
+  el.micPreviewLevel.style.width = '0%';
+  if (!current) return;
+  current.stream.getTracks().forEach((track) => track.stop());
+  await current.meter.close();
+}
+
+async function micGranted(): Promise<boolean> {
+  try {
+    const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+    return status.state === 'granted';
+  } catch {
+    return false;
+  }
 }
 
 async function onRetry(): Promise<void> {
@@ -155,6 +244,7 @@ function render(): void {
   el.micEnabled.disabled = recording || busy;
   el.micDevice.disabled = recording || busy || !el.micEnabled.checked;
   renderMic(recording ? current : null);
+  void syncPreview();
 
   if (current.error) {
     showError(current.error.message, current.error.code === 'mic-permission');
