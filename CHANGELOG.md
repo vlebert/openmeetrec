@@ -6,6 +6,8 @@ version.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-19
+
 ### Added
 
 - **Per-request timeout (10 minutes) on transcription API calls.** A request whose connection the server accepts but never answers used to hang forever, so no retry ever fired and the "finishing" phase could stay stuck indefinitely. A timeout is now aborted and retried like any network error (F-TR-08).
