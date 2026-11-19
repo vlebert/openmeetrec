@@ -111,6 +111,10 @@ async function init(): Promise<void> {
 
 async function onToggle(): Promise<void> {
   el.toggle.disabled = true;
+  // Pendant le START en vol, un clic sur retry enverrait RETRY_PIPELINE en
+  // parallèle de START_RECORDING : le nouvel offscreen purgerait les chunks de
+  // l'ancienne session (pruneSessions) pendant que le retry les lit.
+  el.retry.disabled = true;
   const recording = state?.status === 'recording';
   // Libère le micro avant que l'offscreen ne l'ouvre : certains périphériques
   // (USB sous Windows notamment) n'acceptent qu'un client à la fois.
@@ -214,6 +218,7 @@ async function stopPreview(): Promise<void> {
 
 
 async function onRetry(): Promise<void> {
+  if (starting) return;
   el.retry.disabled = true;
   await chrome.runtime.sendMessage({ target: 'sw', type: 'RETRY_PIPELINE' } satisfies ToWorkerMessage);
   el.retry.disabled = false;
@@ -224,8 +229,8 @@ async function refresh(): Promise<void> {
   state = (await chrome.runtime.sendMessage({ target: 'sw', type: 'GET_STATE' } satisfies ToWorkerMessage)) as SessionState;
   if (isStalePermissionError(state)) {
     // Échec faute d'autorisation, autorisation accordée depuis : l'erreur ne
-    // dit plus rien de vrai. Sans ça, elle restait affichée jusqu'au
-    // redémarrage du navigateur (l'état vit dans `chrome.storage.session`).
+    // dit plus rien de vrai. Sans ça, elle resterait affichée indéfiniment
+    // (l'état de session est persistant, dans `chrome.storage.local`).
     await chrome.runtime.sendMessage({ target: 'sw', type: 'RESET' } satisfies ToWorkerMessage);
     state = (await chrome.runtime.sendMessage({ target: 'sw', type: 'GET_STATE' } satisfies ToWorkerMessage)) as SessionState;
   }
@@ -291,8 +296,15 @@ function render(): void {
     hideError();
   }
 
-  const canRetry = current.sessionId !== null && (current.status === 'error' || current.status === 'done');
+  // Relancer est possible dès qu'une session existe en OPFS : en échec, terminé,
+  // et même en cours de « finishing » — le clic tue le pipeline en vol (requête
+  // bloquée comprise) et le relance, sans perdre l'audio.
+  const canRetry =
+    current.sessionId !== null &&
+    (current.status === 'error' || current.status === 'done' || current.status === 'processing');
   el.retry.hidden = !canRetry;
+  el.retry.disabled = !canRetry || starting;
+  el.retry.textContent = current.status === 'processing' ? 'Restart transcription' : 'Reprocess transcription';
   // Le petit texte « transcription précédente disponible » ne sert qu'au cas
   // nominal (succès sans erreur) : l'erreur elle-même l'explique déjà sinon.
   el.history.hidden = !(canRetry && current.status === 'done' && current.error === null);

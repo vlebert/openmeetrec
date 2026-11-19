@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '@/providers/base';
-import { computeBackoffMs, isRetryableStatus, shouldFallBackToChunks, withRetry } from '@/providers/retry';
+import { computeBackoffMs, isRetryableError, isRetryableStatus, shouldFallBackToChunks, withRetry } from '@/providers/retry';
 
 const noSleep = () => Promise.resolve();
 
@@ -19,6 +19,17 @@ describe('isRetryableStatus', () => {
 
   it('retente quand il n y a pas de statut (réseau, timeout)', () => {
     expect(isRetryableStatus(undefined)).toBe(true);
+  });
+});
+
+describe('isRetryableError', () => {
+  it('traite un timeout de fetch (TimeoutError) comme réessayable', () => {
+    expect(isRetryableError(new DOMException('The operation timed out', 'TimeoutError'))).toBe(true);
+    expect(isRetryableError(new ProviderError('mistral', 'fetch failed'))).toBe(true);
+  });
+
+  it('ne retente pas une clé invalide', () => {
+    expect(isRetryableError(new ProviderError('mistral', 'unauthorized', 401))).toBe(false);
   });
 });
 

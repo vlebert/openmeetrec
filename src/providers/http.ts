@@ -7,12 +7,22 @@
 
 import { ProviderError, type TranscriptionProvider } from '@/providers/base';
 import { parseTranscription } from '@/providers/parse';
-import { withRetry } from '@/providers/retry';
+import { withRetry, type RetryOptions } from '@/providers/retry';
 import type { ProviderId, TranscribeOpts, TranscriptionResult } from '@/shared/types';
 
 const AUDIO_FILENAME = 'audio.webm';
 /** Tronque le corps d'erreur : inutile de propager une page HTML entière. */
 const ERROR_BODY_MAX = 300;
+
+/**
+ * Timeout d'une tentative complète (upload + traitement serveur), F-TR-08.
+ *
+ * Sans lui, une connexion que le serveur accepte sans jamais répondre bloque le
+ * `fetch` indéfiniment — aucun retry ne se déclenche, le chunk reste coincé et
+ * la session avec. 10 min couvre l'upload d'une piste de 45 min (~45 Mo à notre
+ * débit) plus la transcription elle-même, même sur une connexion lente.
+ */
+export const REQUEST_TIMEOUT_MS = 10 * 60_000;
 
 export interface HttpProviderOptions {
   endpoint: string;
@@ -21,6 +31,10 @@ export interface HttpProviderOptions {
   supportsDiarization: boolean;
   /** Injecté dans les tests ; par défaut le `fetch` global. */
   fetchImpl?: typeof fetch;
+  /** Injecté dans les tests ; par défaut `REQUEST_TIMEOUT_MS`. */
+  requestTimeoutMs?: number;
+  /** Injecté dans les tests (évite d'attendre le backoff). */
+  retryOptions?: Partial<RetryOptions>;
 }
 
 export abstract class HttpTranscriptionProvider implements TranscriptionProvider {
@@ -37,7 +51,10 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
   }
 
   async transcribe(audio: Blob, opts: TranscribeOpts): Promise<TranscriptionResult> {
-    const payload = await withRetry(() => this.post(this.options.endpoint, this.buildForm(audio, opts)));
+    const payload = await withRetry(
+      () => this.post(this.options.endpoint, this.buildForm(audio, opts)),
+      this.options.retryOptions,
+    );
     this.checkPayload(payload, opts);
     return parseTranscription(payload);
   }
@@ -62,7 +79,11 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
       return false;
     }
     try {
-      const response = await this.fetch(url, { method: 'GET', headers: this.authHeaders() });
+      const response = await this.fetch(url, {
+        method: 'GET',
+        headers: this.authHeaders(),
+        signal: this.requestSignal(),
+      });
       return response.ok;
     } catch {
       return false;
@@ -86,9 +107,14 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
   private async post(url: string, body: FormData): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.fetch(url, { method: 'POST', headers: this.authHeaders(), body });
+      response = await this.fetch(url, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body,
+        signal: this.requestSignal(),
+      });
     } catch (error) {
-      // Pas de statut : erreur réseau, donc réessayable.
+      // Pas de statut : erreur réseau, timeout compris, donc réessayable.
       throw new ProviderError(this.id, error instanceof Error ? error.message : String(error));
     }
 
@@ -114,5 +140,10 @@ export abstract class HttpTranscriptionProvider implements TranscriptionProvider
    */
   private get fetch(): typeof fetch {
     return this.options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  }
+
+  /** Un signal neuf par tentative : chaque retry a son propre timeout. */
+  private requestSignal(): AbortSignal {
+    return AbortSignal.timeout(this.options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS);
   }
 }

@@ -50,6 +50,18 @@ breakdown.
 - This data is never sent over the network and never written to persistent storage.
 - You can disable this feature entirely in the options page.
 
+### Session state
+
+- While a recording session exists, a small state record is kept in `chrome.storage.local`
+  until the next recording starts or you reset it from the popup: status, the meeting
+  platform's **hostname** (never the full URL), the microphone name, the names of downloaded
+  files, and any error message. It contains no page content and no API key.
+- Purpose: if the browser is closed during the post-recording transcription, the audio
+  chunks kept locally can still be reprocessed instead of being lost.
+- The audio chunks themselves stay in the origin-private file system (OPFS), on your machine
+  only, and are deleted when the next recording starts. They are never sent anywhere except
+  to the transcription provider you configured (see "Audio" above).
+
 ## Third parties
 
 The only third parties involved are the transcription providers **you choose to

@@ -245,8 +245,8 @@ D'où le parcours :
    — accorder l'autorisation n'y changerait rien.
 3. Une fois accordée, l'autorisation vaut pour l'origine de l'extension, donc pour toutes les
    sessions suivantes : ce détour n'a lieu qu'une fois. Le popup efface alors l'erreur
-   `mic-permission` laissée par l'échec : l'état de session vit dans `chrome.storage.session`
-   (§3.5), elle serait sinon restée affichée jusqu'au redémarrage du navigateur.
+   `mic-permission` laissée par l'échec : l'état de session est persistant
+   (`chrome.storage.local`, §3.5), elle resterait sinon affichée indéfiniment.
 4. Micro **bloqué** (bouton « Bloquer », ou demande fermée trop de fois) : Chrome ne redemande
    plus, `getUserMedia` échoue aussitôt. Popup et page d'autorisation renvoient alors vers les
    réglages de Chrome pour l'extension (`chrome://settings/content/siteDetails?site=…`), seul
@@ -259,8 +259,12 @@ prompt prend le focus, ce qui annule la demande.
 
 Le service worker MV3 est tué après quelques dizaines de secondes d'inactivité, alors que
 l'enregistrement continue dans l'offscreen document. L'état de session ne peut donc **pas**
-vivre dans une variable de module : il est persisté dans `chrome.storage.session` et relu à
-chaque message. Le popup, lui, est sans état — il interroge le service worker à l'ouverture.
+vivre dans une variable de module : il est persisté dans `chrome.storage.local` et relu à
+chaque message. `storage.local` et pas `storage.session` parce qu'il doit aussi survivre à
+un **redémarrage du navigateur** : les chunks audio restent en OPFS dans ce cas, et la
+session peut être retraitée (bouton « Reprocess transcription ») au lieu d'être orphelinée
+puis effacée au prochain départ. Le popup, lui, est sans état — il interroge le service
+worker à l'ouverture.
 
 Machine à états : `idle → recording → processing → done`, plus `error` atteignable depuis
 n'importe quel état. `recording` et `processing` refusent tout nouveau départ (F-CAP-08).
@@ -268,7 +272,17 @@ n'importe quel état. `recording` et `processing` refusent tout nouveau départ 
 Au réveil, le service worker rattrape les sessions orphelines : un état `recording` ou
 `processing` sans offscreen document signifie que le navigateur a interrompu la session, et
 qu'aucun message ne viendra plus la faire avancer. Sans ce rattrapage, elle bloquerait
-définitivement les suivantes.
+définitivement les suivantes. Le rattrapage tourne à chaque évaluation du module **et** via
+`chrome.runtime.onStartup`, pour normaliser dès le lancement du navigateur (l'état étant
+persisté, un `recording`/`processing` y survit sinon jusqu'au premier évènement qui réveille
+le SW). L'état passe à `error`, ce qui rend la session retraitable depuis le popup — c'est ce
+qui rend une session `processing` retraitable après un redémarrage du navigateur : les chunks
+sont toujours en OPFS.
+
+**Relance pendant `processing`.** `RETRY_PIPELINE` accepte aussi l'état `processing` (cas
+« finishing coincé ») : fermer l'offscreen document annule ses requêtes en vol, puis le
+pipeline est relancé sur le même `sessionId`. Un compteur d'époque (`pipelineEpoch`) empêche
+le run tué d'écrire `error` ou de fermer l'offscreen du run relancé.
 
 ### 3.6 Où tourne le pipeline
 
@@ -280,6 +294,12 @@ La transcription tourne dans l'**offscreen document**, pas dans le service worke
 Le service worker garde ce que lui seul peut faire : l'état, et `chrome.downloads`. L'offscreen
 lui renvoie des URLs de blob, il déclenche les téléchargements et **attend leur fin** avant de
 fermer l'offscreen — le fermer plus tôt révoquerait les blobs en cours d'écriture.
+
+**Export audio dès le Stop.** La piste continue étant finalisée à l'arrêt de l'enregistrement,
+le téléchargement du `.webm` (si l'option est active) est lancé dès l'entrée en `processing`
+(message `PREPARE_AUDIO_DOWNLOAD`), en **parallèle** de la transcription — l'utilisateur
+récupère son audio tout de suite, sans attendre le markdown. Le pipeline ne renvoie plus que le
+markdown. Un retry ne retélécharge pas l'audio déjà téléchargé.
 
 **Contrainte majeure, vérifiée en conditions réelles** : un offscreen document n'a accès qu'à
 `chrome.runtime`. Relevé dans le document lui-même, l'objet `chrome` ne contient que
@@ -422,9 +442,15 @@ avertissement sur les doublons possibles aux frontières de chunks (F-TR-07).
 
 ### 5.4 Erreurs & retry
 
-`providers/retry.ts` (pur) : backoff exponentiel avec jitter sur 429 / 5xx / timeout réseau, plafond
-de tentatives, abandon immédiat sur 401/403 (clé invalide). Un chunk en échec définitif n'annule pas
-les autres : il est marqué dans le résultat et signalé dans le markdown.
+`providers/retry.ts` (pur) : backoff exponentiel avec jitter sur 429 / 5xx / erreur réseau, plafond
+de 4 tentatives, abandon immédiat sur 401/403 (clé invalide). Chaque tentative a un **timeout de
+10 min** (`AbortSignal.timeout` dans `http.ts`) : une connexion que le serveur accepte sans jamais
+répondre est annulée puis réessayée, au lieu de bloquer le chunk indéfiniment — c'est le scénario
+« finishing coincé ». Un chunk en échec définitif n'annule pas les autres : il est marqué dans le
+résultat et signalé dans le markdown. Si tout échoue, la session passe en `error` et peut être
+relancée (bouton « Reprocess transcription », y compris pendant un `processing` bloqué et après un
+redémarrage du navigateur) : les chunks restent en OPFS tant qu'aucun nouvel enregistrement n'a
+démarré.
 
 ## 6. Export Markdown
 

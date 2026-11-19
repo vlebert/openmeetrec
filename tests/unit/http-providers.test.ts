@@ -162,6 +162,77 @@ describe('providers HTTP', () => {
   });
 });
 
+describe('timeout des requêtes (F-TR-08)', () => {
+  // Sans ce `sleep` injecté, le backoff entre tentatives rendrait le test réel
+  // (plusieurs secondes d'attente).
+  const noSleep = { sleep: () => Promise.resolve() };
+
+  /** Un fetch qui ne répond jamais et ne rejette que quand le signal abort. */
+  function hangingFetch() {
+    return vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The operation timed out', 'TimeoutError')),
+          );
+        }),
+    );
+  }
+
+  it('donne un AbortSignal à chaque tentative ; une requête qui accroche est réessayée puis échoue', async () => {
+    const fetchImpl = hangingFetch();
+    const provider = new MistralProvider({
+      endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+      apiKey: 'k',
+      supportsSegments: true,
+      supportsDiarization: true,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      requestTimeoutMs: 20,
+      retryOptions: noSleep,
+    });
+
+    const error = await provider.transcribe(new Blob(['a']), OPTS).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ProviderError);
+    // Pas de statut HTTP : le timeout est traité comme une erreur réseau,
+    // donc réessayable — sinon la session resterait coincée indéfiniment.
+    expect((error as ProviderError).status).toBeUndefined();
+    expect(fetchImpl).toHaveBeenCalledTimes(4); // maxAttempts par défaut
+    for (const call of fetchImpl.mock.calls) {
+      expect(call[1]?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it('valide la transcription si une tentative suivante aboutit après un timeout', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The operation timed out', 'TimeoutError')),
+          );
+        });
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(RESPONSE), { status: 200, headers: { 'content-type': 'application/json' } }),
+      );
+    });
+    const provider = new MistralProvider({
+      endpoint: 'https://api.mistral.ai/v1/audio/transcriptions',
+      apiKey: 'k',
+      supportsSegments: true,
+      supportsDiarization: true,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      requestTimeoutMs: 20,
+      retryOptions: noSleep,
+    });
+
+    const result = await provider.transcribe(new Blob(['a']), OPTS);
+    expect(result.text).toBe('ok');
+    expect(calls).toBe(2);
+  });
+});
+
 // Régression : sans `bind`, le `fetch` natif appelé comme méthode du provider
 // lève « Illegal invocation » dans le navigateur. Les autres tests injectent
 // tous un `fetchImpl`, donc aucun ne couvrait le chemin par défaut.

@@ -105,9 +105,10 @@ test.describe('micro autorisé après un échec', () => {
 
   test('efface l’erreur périmée au lieu de l’afficher jusqu’au redémarrage', async () => {
     const ext = ctx();
-    // État laissé par un démarrage en échec faute d'autorisation.
+    // État laissé par un démarrage en échec faute d'autorisation. L'état de
+    // session vit dans `chrome.storage.local` (persisté), pas `storage.session`.
     await ext.worker.evaluate(() =>
-      chrome.storage.session.set({
+      chrome.storage.local.set({
         sessionState: {
           status: 'error',
           sessionId: null,

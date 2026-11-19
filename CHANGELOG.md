@@ -6,6 +6,26 @@ version.
 
 ## [Unreleased]
 
+### Added
+
+- **Per-request timeout (10 minutes) on transcription API calls.** A request whose connection the server accepts but never answers used to hang forever, so no retry ever fired and the "finishing" phase could stay stuck indefinitely. A timeout is now aborted and retried like any network error (F-TR-08).
+- **Restart transcription while "finishing" is in progress.** The popup button is now also shown during `processing` (labelled "Restart transcription"): clicking it kills the in-flight pipeline — including any hung request — and relaunches it on the same audio chunks, still in OPFS. Nothing is lost.
+- **Session state persisted in `chrome.storage.local`** (was `storage.session`). After a browser restart in the middle of "finishing", the recording is no longer orphaned: the audio chunks survive in OPFS and the popup still offers to reprocess the transcription, until a new recording starts.
+
+### Changed
+
+- When "download the audio as well" is enabled, the `.webm` download now starts **as soon as recording stops**, in parallel with the transcription, instead of waiting for the transcript. The `.md` still arrives at the end.
+
+### Fixed
+
+- Clicking "Restart transcription" during the brief Stop→processing window can no longer kill the offscreen document in the middle of flushing the last audio chunks (which would have truncated the recording): the pipeline is only interrupted when one is actually in flight, and post-capture messages are serialized in the offscreen document.
+- An interrupted download is no longer recorded as a success (it no longer blocks later retries), blob URLs are revoked once consumed, and a retry after a successful run no longer re-downloads the `.webm` (downloads are merged, not overwritten).
+- The retry button is disabled while a Start is in flight, so `RETRY_PIPELINE` can't race a `START_RECORDING` whose offscreen would prune the chunks being reprocessed.
+- The mic-permission integration test seeded the session state in `chrome.storage.session`; it now seeds `chrome.storage.local`, where the service worker actually reads it (the test was passing vacuously).
+- Orphaned sessions (`recording`/`processing` without an offscreen document) are now also normalized on `chrome.runtime.onStartup`, not just when the service worker wakes up: after a browser restart, the popup no longer shows a phantom "recording", and the saved chunks can be reprocessed.
+- A pipeline restart now also asks the offscreen document whether a pipeline is actually running (`PIPELINE_STATUS`), so a hung "finishing" can be killed even if the service worker was restarted in between (the in-memory flag alone was reset).
+- If the pipeline fails while the `.webm` download is in flight, the download is awaited before the offscreen document is closed (closing it would revoke the blob and truncate the audio), and the downloaded filename is recorded in the session state immediately — a later retry neither loses the audio nor downloads it twice.
+
 ## [0.10.0] - 2026-10-29
 
 ### Added

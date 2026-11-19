@@ -49,6 +49,12 @@
 - **When**: read at the start of a session, written from the options page.
 - **Scope**: `chrome.storage.local` only. API keys are **never** written to `storage.sync`
   (which would send them to the browser's servers) nor logged.
+- **Also persisted there**: the session state (status, meeting platform **hostname**, microphone
+  name, names of downloaded files, last error) — no page content, no full URL, no API key. It
+  lets a session interrupted by a browser restart still be reprocessed from the audio chunks
+  kept in OPFS, instead of being orphaned. It is overwritten on the next Start and cleared on
+  explicit reset in the popup. The meeting-reminder's per-tab data stays in
+  `chrome.storage.session` (volatile, see `tabs` below).
 
 ### `tabs`
 
@@ -83,7 +89,9 @@
 ### `downloads`
 
 - **Why**: write the final Markdown file, and the `.webm` audio if the option is enabled.
-- **When**: at the end of the pipeline, or on click of the download button.
+- **When**: the `.webm` (if the option is enabled) **as soon as recording stops**, in parallel
+  with the transcription — the audio track is finalized at Stop; the Markdown at the end of the
+  pipeline.
 - **Does not allow**: reading the user's existing downloads (no call to
   `chrome.downloads.search` on anything other than our own downloads).
 

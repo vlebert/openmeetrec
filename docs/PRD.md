@@ -104,7 +104,7 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 | F-EX-04 | Diarization sur **une seule requête** : un paragraphe par tour de parole, speaker + timestamp (`**Speaker 0** (00:12:34): …`) |
 | F-EX-05 | Diarization sur **plusieurs chunks** : un paragraphe par tour de parole, **sans nom de speaker**, préfixé du timestamp (`(00:12:34) …`) ; une règle `---` marque chaque frontière de chunk |
 | F-EX-07 | Sans diarization : le texte continu, en un seul bloc |
-| F-EX-06 | Option paramètre : télécharger aussi le fichier audio `.webm` (défaut : markdown seul) |
+| F-EX-06 | Option paramètre : télécharger aussi le fichier audio `.webm` (défaut : markdown seul) — téléchargé **dès l'arrêt de l'enregistrement**, en parallèle de la transcription |
 
 ## 8. Paramètres
 
@@ -149,6 +149,8 @@ L'enregistrement ne dépend jamais de la durée de vie du popup : fermer le popu
 | `speaker_id` incohérents entre chunks | Limitation documentée en MVP (cf. §6) ; ré-appariement post-MVP |
 | Fragilité du chunking/merge | Tests unitaires poussés (ports depuis supervoxtral) |
 | Rate limit API | Concurrence limitée + retry backoff |
+| API qui accepte la connexion sans jamais répondre | Timeout de 10 min par tentative (`AbortSignal.timeout`) + retry (F-TR-08) ; relance manuelle possible pendant le finishing |
+| Échec total ou finishing bloqué en fin de réunion | Chunks conservés en OPFS + état persistant (`storage.local`) : retraitement possible depuis le popup, même après un redémarrage du navigateur, tant qu'aucun nouvel enregistrement n'a démarré |
 | Permissions perçues intrusives | Audit public + permissions `optional` quand possible |
 | Onglet capturé fermé en cours de route | F-CAP-07 : finalisation propre, chunks déjà en OPFS conservés |
 

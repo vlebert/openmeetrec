@@ -115,6 +115,13 @@ export type ToOffscreenMessage =
       /** Transmise par message : l'offscreen n'a pas accès à `chrome.storage`. */
       config: Config;
     }
+  | {
+      target: 'offscreen';
+      type: 'PREPARE_AUDIO_DOWNLOAD';
+      sessionId: string;
+      meta: SessionMeta;
+    }
+  | { target: 'offscreen'; type: 'PIPELINE_STATUS' }
   | { target: 'offscreen'; type: 'GET_LEVELS' };
 
 export type ExtensionMessage = ToWorkerMessage | ToOffscreenMessage;
@@ -149,6 +156,25 @@ export interface PipelineReport {
   failureReason?: string;
   transcribedCount: number;
   hadSegments: boolean;
+}
+
+/**
+ * Réponse à `PREPARE_AUDIO_DOWNLOAD` : la piste complète étant finalisée dès le
+ * Stop, son téléchargement peut partir tout de suite, en parallèle de la
+ * transcription, plutôt que d'attendre que le markdown soit prêt.
+ */
+export interface AudioDownloadAck extends Ack {
+  download?: DownloadRequest;
+}
+
+/**
+ * Réponse à `PIPELINE_STATUS` : un pipeline tourne-t-il (ou est-il en file) dans
+ * l'offscreen ? Sert au service worker à décider s'il peut fermer le document
+ * pour débloquer un « finishing » coincé — fiable même après un redémarrage du
+ * SW, contrairement à un drapeau en mémoire.
+ */
+export interface OffscreenStatus {
+  running: boolean;
 }
 
 export function isForWorker(message: unknown): message is ToWorkerMessage {

@@ -21,9 +21,11 @@ import type { TranscriptDocument } from '@/shared/format';
 import {
   isForOffscreen,
   type Ack,
+  type AudioDownloadAck,
   type AudioLevels,
   type CaptureAck,
   type DownloadRequest,
+  type OffscreenStatus,
   type PipelineReport,
   type SessionError,
   type ToOffscreenMessage,
@@ -58,18 +60,66 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return true;
 });
 
-async function handle(message: ToOffscreenMessage): Promise<Ack | CaptureAck | AudioLevels | PipelineReport> {
+/**
+ * File d'attente des messages post-capture : `STOP_CAPTURE`, `PREPARE_AUDIO_DOWNLOAD`
+ * et `RUN_PIPELINE` s'exécutent en série, dans l'ordre d'arrivée. Sans ça, un
+ * `RUN_PIPELINE` reçu pendant `finish()` lirait l'OPFS pendant que le dernier
+ * chunk y est encore écrit, et deux `RUN_PIPELINE` (ex. retry après redémarrage
+ * du service worker) tourneraient en parallèle et brûleraient les requêtes API
+ * en double.
+ */
+let pending: Promise<unknown> = Promise.resolve();
+
+/** Nombre de jobs pipeline en file ou en cours — exposé via `PIPELINE_STATUS`. */
+let pipelineJobs = 0;
+
+function enqueue<T>(job: () => Promise<T>): Promise<T> {
+  const run = pending.then(job);
+  pending = run.catch(() => undefined);
+  return run;
+}
+
+async function handle(
+  message: ToOffscreenMessage,
+): Promise<Ack | CaptureAck | AudioLevels | PipelineReport | AudioDownloadAck | OffscreenStatus> {
   switch (message.type) {
     case 'START_CAPTURE':
       return startCapture(message);
     case 'STOP_CAPTURE':
-      await finish();
-      return { ok: true };
+      return enqueue(async (): Promise<Ack> => {
+        await finish();
+        return { ok: true };
+      });
     case 'GET_LEVELS':
       return session ? session.mixer.levels() : { tab: 0, mic: 0 };
     case 'RUN_PIPELINE':
-      return runPipeline(message.sessionId, message.meta, message.config);
+      pipelineJobs += 1;
+      return enqueue(async () => {
+        try {
+          return await runPipeline(message.sessionId, message.meta, message.config);
+        } finally {
+          pipelineJobs -= 1;
+        }
+      });
+    case 'PREPARE_AUDIO_DOWNLOAD':
+      return enqueue(() => prepareAudioDownload(message.sessionId, message.meta));
+    case 'PIPELINE_STATUS':
+      return { running: pipelineJobs > 0 } satisfies OffscreenStatus;
   }
+}
+
+/**
+ * La piste continue est écrite et fermée au Stop : son blob peut partir en
+ * téléchargement immédiatement, en parallèle de la transcription, sans
+ * attendre que le markdown soit prêt. Appelé hors session (`session` est null
+ * à ce stade) : tout passe par l'OPFS.
+ */
+async function prepareAudioDownload(sessionId: string, meta: SessionMeta): Promise<AudioDownloadAck> {
+  const track = await opfs.readTrack(sessionId);
+  if (!track || track.size === 0) {
+    return { ok: false, error: { code: 'internal', message: 'no audio track for this session' } };
+  }
+  return { ok: true, download: audioDownload(meta, track) };
 }
 
 /**
@@ -135,11 +185,9 @@ async function runPipeline(sessionId: string, meta: SessionMeta, config: Config)
       ...(outcome.hadSegments ? { segments: outcome.segments } : { text: outcome.text }),
     };
 
+    // Le markdown seul : le fichier audio, lui, est téléchargé dès le Stop par
+    // `PREPARE_AUDIO_DOWNLOAD`, en parallèle de cette transcription.
     const downloads = [markdownDownload(doc)];
-    if (config.downloadAudio) {
-      const track = await opfs.readTrack(sessionId);
-      if (track) downloads.push(audioDownload(meta, track));
-    }
 
     const firstFailure = outcome.failures[0];
     return {

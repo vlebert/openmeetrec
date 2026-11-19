@@ -10,7 +10,7 @@
  */
 
 import { expect, test, type Page, type Worker } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { extensionUrl, launchExtension, type LoadedExtension } from './fixtures/extension';
@@ -147,6 +147,63 @@ test('enregistre une réunion, la transcrit et exporte un markdown', async () =>
   for (let i = 1; i < stamps.length; i += 1) {
     expect(stamps[i]! - stamps[i - 1]!).toBe(5);
   }
+});
+
+test('télécharge l’audio dès le Stop, en parallèle de la transcription (option downloadAudio)', async () => {
+  const meeting = await ext.context.newPage();
+  await meeting.goto(`${api.url}/meeting`);
+  await expect(meeting.locator('#state')).toHaveText('flux distant reçu');
+
+  const tabId = await ext.worker.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab?.id ?? -1;
+  });
+  await configure(ext.worker, `${api.url}/v1/audio/transcriptions`, 'mock-1', true);
+
+  const popup = await ext.context.newPage();
+  await popup.goto(extensionUrl(ext.id, 'ui/popup.html'));
+  const started = await send(popup, {
+    target: 'sw',
+    type: 'START_RECORDING',
+    tabId,
+    url: `${api.url}/meeting`,
+    micEnabled: true,
+    micDeviceId: null,
+  });
+  expect(started).toEqual({ ok: true });
+
+  await popup.waitForTimeout(RECORDING_MS);
+  await send(popup, { target: 'sw', type: 'STOP_RECORDING' });
+  const final = await waitForDone(popup);
+
+  expect(final.status).toBe('done');
+  expect(final.error).toBeNull();
+  // Audio + markdown : l'audio n'attend pas que la transcription soit finie.
+  expect(final.downloads).toHaveLength(2);
+  expect(final.downloads.some((f: string) => f.endsWith('.webm'))).toBe(true);
+  expect(final.downloads.some((f: string) => f.endsWith('.md'))).toBe(true);
+
+  // Les deux téléchargements de cette session sont les deux ids les plus hauts.
+  // Sous Playwright le nom de fichier final est un UUID d'artefact : on reconnaît
+  // l'audio à sa taille (la piste complète, bien plus grosse que le markdown).
+  const files = await ext.worker.evaluate(() => chrome.downloads.search({}));
+  const mine = files
+    .filter((f) => f.state === 'complete' && f.filename)
+    .sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
+    .slice(0, 2);
+  expect(mine).toHaveLength(2);
+  const sizes = await Promise.all(mine.map((f) => stat(f.filename!).then((s) => s.size)));
+  const audioIdx = sizes[0]! >= sizes[1]! ? 0 : 1;
+  const audio = mine[audioIdx]!;
+  const md = mine[1 - audioIdx]!;
+  // L'audio a un id inférieur au markdown : le markdown n'existe qu'une fois la
+  // transcription terminée, donc l'audio est bien parti dès le Stop.
+  expect(audio.id!).toBeLessThan(md.id!);
+  // La piste exportée est réelle, non vide.
+  expect(sizes[audioIdx]).toBeGreaterThan(1000);
+
+  await meeting.close();
+  await popup.close();
 });
 
 test('reprend la transcription après un échec API, sans perdre les chunks (retry)', async () => {
@@ -295,22 +352,25 @@ test('transcrit en une seule requête quand les limites du provider le permetten
   await popup.close();
 });
 
-async function configure(worker: Worker, endpoint: string, model = 'mock-1'): Promise<void> {
-  await worker.evaluate(async ([url, modelId]) => {
-    await chrome.storage.local.set({
-      config: {
-        provider: 'custom',
-        model: modelId,
-        customEndpoint: url,
-        customSupportsSegments: true,
-        customSupportsDiarization: true,
-        apiKeys: { custom: 'cle-de-test' },
-        diarize: true,
-        downloadAudio: false,
-        language: null,
-      },
-    });
-  }, [endpoint, model]);
+async function configure(worker: Worker, endpoint: string, model = 'mock-1', downloadAudio = false): Promise<void> {
+  await worker.evaluate(
+    async ([url, modelId, audio]) => {
+      await chrome.storage.local.set({
+        config: {
+          provider: 'custom',
+          model: modelId,
+          customEndpoint: url,
+          customSupportsSegments: true,
+          customSupportsDiarization: true,
+          apiKeys: { custom: 'cle-de-test' },
+          diarize: true,
+          downloadAudio: audio,
+          language: null,
+        },
+      });
+    },
+    [endpoint, model, downloadAudio],
+  );
 }
 
 // Le popup est un contexte d'extension : c'est de là que part le messaging,
